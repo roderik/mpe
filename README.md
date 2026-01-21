@@ -10,6 +10,8 @@ To do this, skills and setups need to be local to the repository since the web v
 curl -sL https://raw.githubusercontent.com/roderik/mpe/main/setup.sh | bash
 ```
 
+This installs into the **current directory** and will download the full `.agents` folder if it’s missing.
+
 Setup flags:
 
 - `--lite` - skip post-install system/package setup (fast, minimal)
@@ -36,10 +38,7 @@ Setup flags:
 ## Manual Setup
 
 ```bash
-mkdir -p .agents
-curl -sL https://raw.githubusercontent.com/roderik/mpe/main/.agents/setup.json -o .agents/setup.json
-curl -sL https://raw.githubusercontent.com/roderik/mpe/main/.agents/setup.sh -o .agents/setup.sh
-chmod +x .agents/setup.sh
+curl -sL https://github.com/roderik/mpe/archive/refs/heads/main.tar.gz | tar -xz --strip-components=1 "mpe-main/.agents"
 bash .agents/setup.sh
 ```
 

@@ -12,11 +12,39 @@
     "octocode": {
       "command": "npx",
       "args": ["-y", "octocode-mcp@latest"]
+    },
+    "shadcn": {
+      "command": "npx",
+      "args": ["shadcn@latest", "mcp"]
+    },
+    "codex": {
+      "command": "codex",
+      "args": ["-m", "gpt-5.2-codex", "-c", "model_reasoning_effort=xhigh", "mcp-server"],
+      "_note": "Claude Code only - do not configure in Codex"
+    },
+    "restate-docs": {
+      "type": "http",
+      "url": "https://docs.restate.dev/mcp"
     }
   },
   "workflow": {
     "title": "Development Workflow",
     "description": "Follow this workflow for all implementation tasks. Each phase is mandatory. If you deviate from this workflow, you MUST explain why and how you deviated. Exceptions: documentation-only, configuration-only, or research-only tasks may skip tests, but must state why.",
+    "convergenceGuidance": {
+      "principle": "Rule-of-Five: Iterative refinement until quality converges. First outputs are drafts, not finals.",
+      "passProgression": "Each pass broadens scope: code → architecture → existential questions",
+      "evidenceOverClaims": "Every pass must include evidence (test output, code citations, tool output), not just 'looks good'",
+      "passByComplexity": {
+        "trivial": "1-2 passes",
+        "standard": "3 passes",
+        "complex": "4-5 passes",
+        "critical": "5+ passes"
+      },
+      "strongStopSignals": ["Zero findings", "Only cosmetic issues", "Agent declares convergence", "Confidence >= 8/10"],
+      "weakStopSignals": ["Diminishing severity (P1→P2→P3)", "Smaller diffs each pass", "Faster completion"],
+      "continueSignals": ["P1/P2 findings emerging", "Scope expansion needed", "Untested dimensions remain"],
+      "bannedPhrases": ["looks good", "tests pass (without output)", "no issues (without what was checked)", "should work"]
+    },
     "principles": [
       "ALWAYS use latest package versions. Check npmjs.com, hub.docker.com, pypi.org for current versions before installing.",
       "Never hardcode old versions unless explicitly required for compatibility.",
@@ -55,6 +83,12 @@
             "note": "exact file paths, code snippets, 2-5 minute tasks"
           },
           {
+            "action": "Deep reasoning review (Claude Code only)",
+            "tool": "mcp__codex",
+            "note": "Use codex MCP for architectural decisions and complex planning. Skip in Codex.",
+            "condition": "complex features or architectural decisions"
+          },
+          {
             "action": "Find tracking issue",
             "tool": "mcp__linear__list_issues",
             "condition": "tracking work in Linear",
@@ -71,17 +105,29 @@
       {
         "name": "Plan Refinement",
         "iterations": 5,
-        "note": "Loop until plan is bulletproof",
+        "note": "Rule-of-Five convergence: each pass broadens scope until zero findings",
+        "convergence": {
+          "passFocus": [
+            { "pass": 1, "focus": "Completeness", "question": "All areas covered? Goals clear?" },
+            { "pass": 2, "focus": "Clarity", "question": "Can agent implement with zero questions?" },
+            { "pass": 3, "focus": "Testability", "question": "All success criteria measurable?" },
+            { "pass": 4, "focus": "Boundaries", "question": "Always/Ask/Never defined? No vague language?" },
+            { "pass": 5, "focus": "Strategic", "question": "Right problem? Right scope? Future-proof?" }
+          ],
+          "stopWhen": ["Zero new findings", "Only cosmetic issues", "Agent declares convergence"],
+          "continueWhen": ["P1/P2 findings still emerging", "Vague language remains", "Untested dimensions"],
+          "evidenceRequired": "Each pass must cite specific findings with locations, not just 'looks good'"
+        },
         "steps": [
           {
             "tool": "Task({ subagent_type: \"build-mode:spec-reviewer\", prompt: \"Review plan against requirements\" })"
           },
           { "tool": "Skill({ skill: \"ask-questions-if-underspecified\" })" },
           {
-            "tool": "Skill({ skill: \"codex-review\" })",
-            "note": "Review for gaps"
+            "tool": "mcp__codex (Claude Code) or manual deep review (Codex)",
+            "note": "Use codex MCP for deep reasoning review if available"
           },
-          { "action": "Update plan based on findings" }
+          { "action": "Document findings with evidence markers, update plan" }
         ],
         "deepen": [
           "requirements clarity",
@@ -162,8 +208,26 @@
         "name": "Review",
         "trigger": "Skill({ skill: \"build-mode:review\" })",
         "alias": "/review",
+        "iterations": 5,
+        "note": "Rule-of-Five convergence for code review",
+        "convergence": {
+          "passFocus": [
+            { "pass": 1, "focus": "Standard Review", "question": "Bugs? Edge cases? Test coverage?" },
+            { "pass": 2, "focus": "Deep Review", "question": "Error handling? Naming? Duplication?" },
+            { "pass": 3, "focus": "Architecture", "question": "Patterns? Dependencies? YAGNI violations?" },
+            { "pass": 4, "focus": "Security", "question": "Injection? Auth? Data exposure?" },
+            { "pass": 5, "focus": "Existential", "question": "Right problem? Right approach? Future-proof?" }
+          ],
+          "stopWhen": ["Zero new findings", "Only cosmetic issues", "Confidence >= 8/10"],
+          "continueWhen": ["P1/P2 findings still emerging", "Architecture not reviewed", "Security not checked"],
+          "evidenceRequired": "Test output with counts, code citations with line numbers, tool output"
+        },
         "steps": [
           { "tool": "Task({ subagent_type: \"build-mode:code-reviewer\" })" },
+          {
+            "tool": "mcp__codex (Claude Code only)",
+            "note": "Deep reasoning review for complex logic - skip in Codex"
+          },
           {
             "tool": "Task({ subagent_type: \"build-mode:security-reviewer\" })",
             "condition": "auth/data/payments"
@@ -179,13 +243,27 @@
         "trigger": "Skill({ skill: \"verification-before-completion\" })",
         "iterations": 5,
         "ironLaw": "Never claim completion without fresh verification evidence",
+        "note": "Rule-of-Five convergence: evidence-based verification passes",
+        "convergence": {
+          "passFocus": [
+            { "pass": 1, "focus": "Tests Pass", "evidence": "Test output: X tests, 0 failures" },
+            { "pass": 2, "focus": "Lint Clean", "evidence": "Lint output: 0 errors, 0 warnings" },
+            { "pass": 3, "focus": "Build Success", "evidence": "Build exit code 0" },
+            { "pass": 4, "focus": "Spec Compliance", "evidence": "Each requirement mapped to test/code" },
+            { "pass": 5, "focus": "Final Confidence", "evidence": "Self-assessment >= 8/10 with justification" }
+          ],
+          "stopWhen": ["All evidence markers present", "Exit codes all 0", "Confidence >= 8/10"],
+          "continueWhen": ["Any test failing", "Warnings present", "Spec gaps identified"],
+          "evidenceFormat": "## Pass N: [Focus] - EVIDENCE\n- ✓ [Marker]: `actual output`\n- Finding: [issue] at [location] - FIXED"
+        },
         "steps": [
           {
             "tool": "Task({ subagent_type: \"build-mode:completion-validator\" })"
           },
           { "command": "bun run ci" },
-          { "action": "Verify exit codes, test counts, no warnings" },
-          { "action": "If issues: Fix and restart loop" },
+          { "action": "Document evidence: exit codes, test counts, warnings" },
+          { "action": "If issues: Fix, document fix, restart loop" },
+          { "action": "Update README.md and docs if behavior changed" },
           {
             "tool": "mcp__linear__update_issue",
             "note": "If MCP Linear is configured, use mcp__linear__* (list_issues, get_issue, update_issue, create_comment). Otherwise leave a status note in the response.",
@@ -197,7 +275,10 @@
     "mcpServersReference": [
       { "server": "context7", "tools": "resolve-library-id, query-docs", "purpose": "Up-to-date library documentation" },
       { "server": "octocode", "tools": "githubSearchCode, githubGetFileContent, githubViewRepoStructure, packageSearch", "purpose": "GitHub code search and exploration" },
-      { "server": "linear", "tools": "list_issues, get_issue, create_issue, update_issue, create_comment", "purpose": "Issue tracking and project management" }
+      { "server": "linear", "tools": "list_issues, get_issue, create_issue, update_issue, create_comment", "purpose": "Issue tracking and project management" },
+      { "server": "shadcn", "tools": "add, diff, list", "purpose": "shadcn/ui component generation and management" },
+      { "server": "codex", "tools": "deep-reasoning, code-review, architecture-analysis", "purpose": "Deep code reasoning with gpt-5.2-codex (Claude Code only)", "_note": "Do not configure in Codex" },
+      { "server": "restate-docs", "tools": "query", "purpose": "Restate durable execution framework documentation" }
     ],
     "quickReference": [
       { "phase": "Plan", "tool": "/plan", "purpose": "Structure approach" },
@@ -298,11 +379,7 @@
       "repo": "boristane/agent-skills",
       "skills": ["logging-best-practices"]
     },
-    {
-      "repo": "BenedictKing/codex-review",
-      "skills": ["codex-review"]
-    },
-    {
+        {
       "repo": "wshobson/agents",
       "skills": ["typescript-advanced-types"]
     },
@@ -341,7 +418,7 @@
         "name": "Code Quality",
         "triggers": ["review", "quality", "clean", "refactor", "lint", "unused"],
         "skills": [
-          { "name": "codex-review", "triggers": ["/review", "code review", "review changes", "check my code"] },
+          { "name": "mcp__codex (Claude Code)", "triggers": ["/review", "code review", "review changes", "deep review"], "note": "Use codex MCP for deep reasoning review - Claude Code only" },
           { "name": "code-simplifier", "triggers": ["simplify", "cleaner", "more readable", "reduce complexity"] },
           { "name": "deslop", "triggers": ["AI slop", "unnecessary comments", "defensive checks", "clean up generated"] },
           { "name": "knip", "triggers": ["unused", "dead code", "unused exports", "unused dependencies"] },

@@ -6,6 +6,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$SCRIPT_DIR/.."
 CONFIG_FILE="$SCRIPT_DIR/setup.json"
 TEMPLATES_DIR="$SCRIPT_DIR/templates"
+COMMANDS_DIR="$SCRIPT_DIR/commands"
+CODEX_PROMPTS_DIR=""
+RUN_CODEX_MCP=1
 RUN_POST_INSTALL=1
 RUN_SKILLS=1
 DOCS_ONLY=0
@@ -26,6 +29,9 @@ for arg in "$@"; do
         --lite)
             RUN_POST_INSTALL=0
             ;;
+        --skip-codex-mcp)
+            RUN_CODEX_MCP=0
+            ;;
     esac
 done
 
@@ -38,6 +44,12 @@ fi
 if [[ ! -f "$CONFIG_FILE" ]]; then
     echo "Error: $CONFIG_FILE not found"
     exit 1
+fi
+
+if [[ -n "$HOME" ]]; then
+    CODEX_PROMPTS_DIR="$HOME/.codex/prompts"
+else
+    CODEX_PROMPTS_DIR="$PROJECT_ROOT/.codex/prompts"
 fi
 
 # Copy templates to project
@@ -64,6 +76,53 @@ copy_templates() {
     fi
 }
 
+# Copy commands to agent-specific folders
+copy_commands() {
+    if [[ ! -d "$COMMANDS_DIR" ]]; then
+        return
+    fi
+
+    local command_files
+    command_files=$(find "$COMMANDS_DIR" -name "*.md" -type f 2>/dev/null)
+
+    if [[ -z "$command_files" ]]; then
+        return
+    fi
+
+    echo "Setting up commands..."
+
+    # Get configured agents
+    local agents
+    agents=$(jq -r '.agents // ["claude-code"] | .[]' "$CONFIG_FILE" 2>/dev/null)
+
+    for agent in $agents; do
+        case "$agent" in
+            claude-code|claude)
+                # Claude Code uses .claude/commands/
+                mkdir -p "$PROJECT_ROOT/.claude/commands"
+                for cmd_file in $command_files; do
+                    local filename
+                    filename=$(basename "$cmd_file")
+                    cp "$cmd_file" "$PROJECT_ROOT/.claude/commands/$filename"
+                done
+                echo "  Copied commands to .claude/commands/"
+                ;;
+            codex)
+                # Codex custom prompts live in ~/.codex/prompts
+                mkdir -p "$CODEX_PROMPTS_DIR"
+                for cmd_file in $command_files; do
+                    local filename
+                    filename=$(basename "$cmd_file")
+                    cp "$cmd_file" "$CODEX_PROMPTS_DIR/$filename"
+                done
+                echo "  Copied commands to $CODEX_PROMPTS_DIR"
+                ;;
+        esac
+    done
+
+    echo "Commands installed successfully"
+}
+
 # Generate .mcp.json from config
 generate_mcp_json() {
     local mcp_servers
@@ -80,6 +139,81 @@ generate_mcp_json() {
 
     echo "$mcp_json" > "$PROJECT_ROOT/.mcp.json"
     echo "Generated .mcp.json with MCP server configurations"
+}
+
+# Configure Codex MCP servers in global config
+configure_codex_mcp() {
+    if [[ $RUN_CODEX_MCP -ne 1 ]]; then
+        return
+    fi
+
+    local mcp_servers
+    mcp_servers=$(jq -r '.mcpServers // empty' "$CONFIG_FILE")
+
+    if [[ -z "$mcp_servers" || "$mcp_servers" == "null" ]]; then
+        return
+    fi
+
+    local codex_home="${CODEX_HOME:-$HOME/.codex}"
+    if [[ -z "$codex_home" ]]; then
+        codex_home="$PROJECT_ROOT/.codex"
+    fi
+
+    local config_file="$codex_home/config.toml"
+    mkdir -p "$codex_home"
+
+    local tmp_file
+    tmp_file=$(mktemp)
+
+    if [[ -f "$config_file" ]]; then
+        cp "$config_file" "$tmp_file"
+    else
+        : >"$tmp_file"
+    fi
+
+    local names
+    names=$(echo "$mcp_servers" | jq -r 'keys[]')
+
+    for name in $names; do
+        local tmp_out
+        tmp_out=$(mktemp)
+        awk -v target="mcp_servers.${name}" '
+        function is_header(line) { return line ~ /^\[[^]]+\]/ }
+        {
+          if ($0 == "[" target "]") { skip=1; next }
+          if (skip && is_header($0)) { skip=0 }
+          if (!skip) print $0
+        }
+      ' "$tmp_file" >"$tmp_out"
+        mv "$tmp_out" "$tmp_file"
+    done
+
+    printf '\n' >>"$tmp_file"
+
+    for name in $names; do
+        local server_json url command args
+        server_json=$(echo "$mcp_servers" | jq -c --arg name "$name" '.[$name]')
+        url=$(echo "$server_json" | jq -r '.url // empty')
+        command=$(echo "$server_json" | jq -r '.command // empty')
+        args=$(echo "$server_json" | jq -c '.args // empty')
+
+        {
+            printf '[mcp_servers.%s]\n' "$name"
+            if [[ -n "$url" ]]; then
+                printf 'url = "%s"\n' "$url"
+            fi
+            if [[ -n "$command" ]]; then
+                printf 'command = "%s"\n' "$command"
+            fi
+            if [[ -n "$args" && "$args" != "null" && "$args" != "[]" ]]; then
+                printf 'args = %s\n' "$args"
+            fi
+            printf '\n'
+        } >>"$tmp_file"
+    done
+
+    mv "$tmp_file" "$config_file"
+    echo "Updated Codex MCP config at $config_file"
 }
 
 # Install skills from config
@@ -600,11 +734,14 @@ if [[ $DOCS_ONLY -eq 1 ]]; then
     generate_mcp_json
     update_workflows
     update_routing_tables
+    copy_commands
     exit 0
 fi
 
 copy_templates
+copy_commands
 generate_mcp_json
+configure_codex_mcp
 install_skills
 update_workflows
 update_routing_tables

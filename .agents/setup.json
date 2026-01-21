@@ -32,7 +32,7 @@
           {
             "action": "Gather context",
             "tool": "Task({ subagent_type: \"plan-mode:context-researcher\" })",
-            "note": "Start with local CLI repo discovery: `rg --files`, `git ls-files`, `ls`, `sed -n '1,200p' file`."
+            "note": "Start with local CLI repo discovery: `rg --files`, `git ls-files`, `ls`, `sed -n '1,200p' file`. If `rg` is missing, use `find . -type f` and `grep -R \"pattern\" .`."
           },
           {
             "action": "Repo-wide search (if needed)",
@@ -53,6 +53,12 @@
           {
             "action": "Draft plan",
             "note": "exact file paths, code snippets, 2-5 minute tasks"
+          },
+          {
+            "action": "Find tracking issue",
+            "tool": "mcp__linear__list_issues",
+            "condition": "tracking work in Linear",
+            "note": "If MCP Linear is configured, find the relevant issue first. Otherwise ask for the issue ID."
           },
           {
             "action": "Update tracking ticket with plan",
@@ -120,7 +126,7 @@
           },
           {
             "tool": "Skill({ skill: \"claude-md-improver\" })",
-            "condition": "when CLAUDE.md needs maintenance",
+            "condition": "CLAUDE.md needs maintenance",
             "note": "Run after major doc or workflow changes."
           },
           {
@@ -223,6 +229,9 @@
     "darwin": [
       "brew install jq graphviz poppler semgrep uv ripgrep",
       "brew install --cask libreoffice codeql"
+    ],
+    "linux": [
+      "if command -v apt-get >/dev/null 2>&1; then (sudo -n apt-get update -qq && sudo -n apt-get install -y jq ripgrep graphviz poppler-utils) || (apt-get update -qq && apt-get install -y jq ripgrep graphviz poppler-utils) || true; fi"
     ],
     "common": [
       "uv pip install --system --break-system-packages 'markitdown[pptx]' defusedxml",

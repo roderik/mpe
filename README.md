@@ -14,6 +14,7 @@ Setup flags:
 
 - `--lite` - skip post-install system/package setup (fast, minimal)
 - `--skip-postinstall` - same as `--lite`, but explicit
+- `--skip-codex-mcp` - skip updating Codex MCP config in `~/.codex/config.toml`
 - `--docs-only` - only refresh workflow/routing tables in `CLAUDE.md` and `AGENTS.md`
 - `--skip-skills` - skip installing skills (useful for docs-only runs)
 
@@ -60,6 +61,8 @@ CLAUDE_CODE_REMOTE=true bash .claude/scripts/web/session-start/setup.sh
 # Install skills + update workflow tables
 bash .agents/setup.sh --lite
 ```
+
+Note: `setup.sh` will also update Codex MCP config in `~/.codex/config.toml` based on `.agents/setup.json`. Use `--skip-codex-mcp` to avoid touching global config.
 
 ## Refresh Workflow + Routing Tables
 

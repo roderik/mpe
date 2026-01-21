@@ -11,8 +11,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$SCRIPT_DIR/../../../.."
 
 echo "Installing system dependencies..."
-apt-get update -qq
-apt-get install -y -qq jq graphviz poppler-utils libreoffice-calc unzip >/dev/null
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -qq 2>/dev/null || true
+apt-get install -y -qq jq graphviz poppler-utils libreoffice-calc unzip >/dev/null 2>&1 || true
 
 echo "Installing Python packages..."
 uv pip install --system 'markitdown[pptx]' defusedxml semgrep --quiet

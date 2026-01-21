@@ -36,7 +36,7 @@ fi
 if [ -f "$PROJECT_ROOT/package.json" ]; then
     echo "Installing project dependencies..."
     cd "$PROJECT_ROOT"
-    bun install --silent
+    bun install
 fi
 
 echo "Remote environment setup complete"

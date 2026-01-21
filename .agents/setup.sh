@@ -6,6 +6,28 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$SCRIPT_DIR/.."
 CONFIG_FILE="$SCRIPT_DIR/setup.json"
 TEMPLATES_DIR="$SCRIPT_DIR/templates"
+RUN_POST_INSTALL=1
+RUN_SKILLS=1
+DOCS_ONLY=0
+
+for arg in "$@"; do
+    case "$arg" in
+        --skip-postinstall)
+            RUN_POST_INSTALL=0
+            ;;
+        --skip-skills)
+            RUN_SKILLS=0
+            ;;
+        --docs-only)
+            RUN_POST_INSTALL=0
+            RUN_SKILLS=0
+            DOCS_ONLY=1
+            ;;
+        --lite)
+            RUN_POST_INSTALL=0
+            ;;
+    esac
+done
 
 # Check dependencies
 if ! command -v jq &>/dev/null; then
@@ -42,8 +64,30 @@ copy_templates() {
     fi
 }
 
+# Generate .mcp.json from config
+generate_mcp_json() {
+    local mcp_servers
+    mcp_servers=$(jq -r '.mcpServers // empty' "$CONFIG_FILE")
+
+    if [[ -z "$mcp_servers" || "$mcp_servers" == "null" ]]; then
+        return
+    fi
+
+    echo "Generating .mcp.json..."
+
+    local mcp_json
+    mcp_json=$(jq -n --argjson servers "$mcp_servers" '{ mcpServers: $servers }')
+
+    echo "$mcp_json" > "$PROJECT_ROOT/.mcp.json"
+    echo "Generated .mcp.json with MCP server configurations"
+}
+
 # Install skills from config
 install_skills() {
+    if [[ $RUN_SKILLS -ne 1 ]]; then
+        return
+    fi
+
     local agents
     agents=$(jq -r '.agents | map("-a " + .) | join(" ")' "$CONFIG_FILE")
 
@@ -75,8 +119,36 @@ install_skills() {
 
 # Run post-install commands from config
 run_post_install() {
+    if [[ $RUN_POST_INSTALL -ne 1 ]]; then
+        return
+    fi
+
     local cmd_count
-    cmd_count=$(jq -r '.postInstall // [] | length' "$CONFIG_FILE")
+    local post_type
+    post_type=$(jq -r '.postInstall | type' "$CONFIG_FILE")
+    local os_key=""
+    local cmds=()
+    local os_cmds=()
+
+    case "$(uname -s)" in
+        Darwin) os_key="darwin" ;;
+        Linux) os_key="linux" ;;
+        MINGW*|MSYS*|CYGWIN*) os_key="windows" ;;
+    esac
+
+    if [[ "$post_type" == "array" ]]; then
+        mapfile -t cmds < <(jq -r '.postInstall[]' "$CONFIG_FILE")
+    elif [[ "$post_type" == "object" ]]; then
+        mapfile -t cmds < <(jq -r '.postInstall.common // [] | .[]' "$CONFIG_FILE")
+        if [[ -n "$os_key" ]]; then
+            mapfile -t os_cmds < <(jq -r --arg os "$os_key" '.postInstall[$os] // [] | .[]' "$CONFIG_FILE")
+            cmds+=("${os_cmds[@]}")
+        fi
+    else
+        return
+    fi
+
+    cmd_count=${#cmds[@]}
 
     if [[ $cmd_count -eq 0 ]]; then
         return
@@ -85,8 +157,7 @@ run_post_install() {
     echo "Running post-install commands..."
 
     for ((i = 0; i < cmd_count; i++)); do
-        local cmd
-        cmd=$(jq -r ".postInstall[$i]" "$CONFIG_FILE")
+        local cmd="${cmds[$i]}"
 
         echo "  Running: $cmd"
 
@@ -104,80 +175,132 @@ run_post_install() {
     echo "Post-install commands completed"
 }
 
-# Update routing tables in agent configuration files
-update_routing_tables() {
-    local skills_dir="$SCRIPT_DIR/skills"
-    local routing_content=""
+# Compile hierarchical skill routing from config
+compile_skill_routing() {
+    local routing_json
+    routing_json=$(jq -r '.skillRouting // empty' "$CONFIG_FILE")
 
-    if [[ ! -d "$skills_dir" ]]; then
-        echo "No skills directory found, skipping routing table update"
-        return
+    if [[ -z "$routing_json" || "$routing_json" == "null" ]]; then
+        return ""
     fi
 
-    # Find all SKILL.md files and extract frontmatter
-    while IFS= read -r -d '' skill_file; do
-        local skill_name=""
-        local skill_description=""
-        local in_frontmatter=false
-        local frontmatter_started=false
-        local reading_multiline_desc=false
+    local md=""
+    local cat_count
+    cat_count=$(echo "$routing_json" | jq -r '.categories | length')
 
-        while IFS= read -r line; do
-            if [[ "$line" == "---" ]]; then
-                if [[ "$frontmatter_started" == false ]]; then
-                    frontmatter_started=true
-                    in_frontmatter=true
-                    continue
-                else
-                    break
-                fi
-            fi
+    for ((c = 0; c < cat_count; c++)); do
+        local category
+        category=$(echo "$routing_json" | jq -r ".categories[$c]")
 
-            if [[ "$in_frontmatter" == true ]]; then
-                # Check if we're in a multiline description
-                if [[ "$reading_multiline_desc" == true ]]; then
-                    # If line starts with a field name (word followed by colon), stop multiline
-                    if [[ "$line" =~ ^[a-zA-Z_-]+: ]]; then
-                        reading_multiline_desc=false
-                    elif [[ -n "$line" ]]; then
-                        # Append to description (trim leading whitespace)
-                        local trimmed_line="${line#"${line%%[![:space:]]*}"}"
-                        if [[ -n "$trimmed_line" ]]; then
-                            skill_description+=" $trimmed_line"
-                        fi
-                        continue
-                    fi
-                fi
+        local cat_name cat_triggers
+        cat_name=$(echo "$category" | jq -r '.name')
+        cat_triggers=$(echo "$category" | jq -r '.triggers | join(", ")')
 
-                if [[ "$line" =~ ^name:\ *(.+)$ ]]; then
-                    skill_name="${BASH_REMATCH[1]}"
-                elif [[ "$line" =~ ^description:\ *\>$ ]] || [[ "$line" =~ ^description:\ *\|$ ]]; then
-                    # Multiline YAML description (folded > or literal |)
-                    skill_description=""
-                    reading_multiline_desc=true
-                elif [[ "$line" =~ ^description:\ *(.+)$ ]]; then
-                    skill_description="${BASH_REMATCH[1]}"
-                    # Remove surrounding quotes if present
-                    skill_description="${skill_description#\"}"
-                    skill_description="${skill_description%\"}"
-                fi
-            fi
-        done <"$skill_file"
+        md+="### $cat_name"$'\n'
+        md+="**Triggers:** $cat_triggers"$'\n\n'
+        md+="| Trigger Phrases | Invocation |"$'\n'
+        md+="|-----------------|------------|"$'\n'
 
-        # Clean up description - collapse multiple spaces
-        skill_description=$(echo "$skill_description" | tr -s ' ' | sed 's/^ //')
+        local skill_count
+        skill_count=$(echo "$category" | jq -r '.skills | length')
 
-        if [[ -n "$skill_name" && -n "$skill_description" ]]; then
-            routing_content+="| $skill_description | \`Skill({ skill: \"$skill_name\" })\` |"$'\n'
-        fi
-    done < <(find "$skills_dir" -name "SKILL.md" -print0 2>/dev/null)
+        for ((s = 0; s < skill_count; s++)); do
+            local skill skill_name skill_triggers skill_note
+            skill=$(echo "$category" | jq -r ".skills[$s]")
+            skill_name=$(echo "$skill" | jq -r '.name')
+            skill_triggers=$(echo "$skill" | jq -r '.triggers | join(", ")')
+            skill_note=$(echo "$skill" | jq -r '.note // empty')
 
-    # Build the full table if we have content
+            local triggers_col="$skill_triggers"
+            [[ -n "$skill_note" ]] && triggers_col+=" *(${skill_note})*"
+            md+="| $triggers_col | \`Skill({ skill: \"$skill_name\" })\` |"$'\n'
+        done
+        md+=$'\n'
+    done
+
+    echo "$md"
+}
+
+# Update routing tables in agent configuration files
+update_routing_tables() {
     local table_content=""
-    if [[ -n "$routing_content" ]]; then
-        table_content="| When to use | Invocation |"$'\n'
-        table_content+="| ----------- | ---------- |"$'\n'
-        table_content+="$routing_content"
+
+    # Try hierarchical routing from config first
+    local hierarchical_content
+    hierarchical_content=$(compile_skill_routing)
+
+    if [[ -n "$hierarchical_content" ]]; then
+        table_content="$hierarchical_content"
+    else
+        # Fallback: extract from SKILL.md files
+        local skills_dir="$SCRIPT_DIR/skills"
+        local entries=()
+
+        if [[ -d "$skills_dir" ]]; then
+            while IFS= read -r -d '' skill_file; do
+                local skill_name=""
+                local skill_description=""
+                local in_frontmatter=false
+                local frontmatter_started=false
+                local reading_multiline_desc=false
+
+                while IFS= read -r line; do
+                    if [[ "$line" == "---" ]]; then
+                        if [[ "$frontmatter_started" == false ]]; then
+                            frontmatter_started=true
+                            in_frontmatter=true
+                            continue
+                        else
+                            break
+                        fi
+                    fi
+
+                    if [[ "$in_frontmatter" == true ]]; then
+                        if [[ "$reading_multiline_desc" == true ]]; then
+                            if [[ "$line" =~ ^[a-zA-Z_-]+: ]]; then
+                                reading_multiline_desc=false
+                            elif [[ -n "$line" ]]; then
+                                local trimmed_line="${line#"${line%%[![:space:]]*}"}"
+                                [[ -n "$trimmed_line" ]] && skill_description+=" $trimmed_line"
+                                continue
+                            fi
+                        fi
+
+                        if [[ "$line" =~ ^name:\ *(.+)$ ]]; then
+                            skill_name="${BASH_REMATCH[1]}"
+                        elif [[ "$line" =~ ^description:\ *\>$ ]] || [[ "$line" =~ ^description:\ *\|$ ]]; then
+                            skill_description=""
+                            reading_multiline_desc=true
+                        elif [[ "$line" =~ ^description:\ *(.+)$ ]]; then
+                            skill_description="${BASH_REMATCH[1]}"
+                            skill_description="${skill_description#\"}"
+                            skill_description="${skill_description%\"}"
+                        fi
+                    fi
+                done <"$skill_file"
+
+                skill_description=$(echo "$skill_description" | tr -s ' ' | sed 's/^ //')
+
+                if [[ -n "$skill_name" && -n "$skill_description" ]]; then
+                    entries+=("$skill_name|$skill_description")
+                fi
+            done < <(find "$skills_dir" -name "SKILL.md" -print0 2>/dev/null)
+
+            if [[ ${#entries[@]} -gt 0 ]]; then
+                local routing_content
+                routing_content=$(printf '%s\n' "${entries[@]}" | sort -t '|' -k1,1 | while IFS='|' read -r name desc; do
+                    printf '| %s | `Skill({ skill: "%s" })` |\n' "$desc" "$name"
+                done)
+                table_content="| When to use | Invocation |"$'\n'
+                table_content+="| ----------- | ---------- |"$'\n'
+                table_content+="$routing_content"
+            fi
+        fi
+    fi
+
+    if [[ -z "$table_content" ]]; then
+        echo "No skill routing content found"
+        return
     fi
 
     # Update CLAUDE.md at project root
@@ -256,6 +379,21 @@ compile_workflow() {
     desc=$(echo "$workflow_json" | jq -r '.description // ""')
     md+="## $title"$'\n\n'
     [[ -n "$desc" ]] && md+="$desc"$'\n\n'
+
+    # Principles
+    local principles
+    principles=$(echo "$workflow_json" | jq -r '.principles // empty')
+    if [[ -n "$principles" && "$principles" != "null" ]]; then
+        md+="### Principles"$'\n\n'
+        local prin_count
+        prin_count=$(echo "$principles" | jq -r 'length')
+        for ((pr = 0; pr < prin_count; pr++)); do
+            local prin
+            prin=$(echo "$principles" | jq -r ".[$pr]")
+            md+="- $prin"$'\n'
+        done
+        md+=$'\n'
+    fi
 
     # Phases
     local phase_count
@@ -357,6 +495,26 @@ compile_workflow() {
             pu=$(echo "$row" | jq -r '.purpose')
             md+="| $ph | \`$tl\` | $pu |"$'\n'
         done
+        md+=$'\n'
+    fi
+
+    # MCP servers reference table
+    local mcp
+    mcp=$(echo "$workflow_json" | jq -r '.mcpServersReference // empty')
+    if [[ -n "$mcp" && "$mcp" != "null" ]]; then
+        md+="### MCP Servers Reference"$'\n\n'
+        md+="| Server | Tools | Purpose |"$'\n'
+        md+="|--------|-------|---------|"$'\n'
+        local mcp_count
+        mcp_count=$(echo "$mcp" | jq -r 'length')
+        for ((m = 0; m < mcp_count; m++)); do
+            local row srv tools pu
+            row=$(echo "$mcp" | jq -r ".[$m]")
+            srv=$(echo "$row" | jq -r '.server')
+            tools=$(echo "$row" | jq -r '.tools')
+            pu=$(echo "$row" | jq -r '.purpose')
+            md+="| \`mcp__${srv}__*\` | $tools | $pu |"$'\n'
+        done
     fi
 
     echo "$md"
@@ -402,6 +560,14 @@ update_file_section() {
 
     # Check if tags exist
     if ! grep -q "<$tag>" "$file"; then
+        {
+            cat "$file"
+            echo ""
+            echo "<$tag>"
+            cat "$content_file"
+            echo "</$tag>"
+        } >"$temp_file"
+        mv "$temp_file" "$file"
         rm -f "$content_file"
         return
     fi
@@ -430,7 +596,15 @@ update_file_section() {
     rm -f "$content_file"
 }
 
+if [[ $DOCS_ONLY -eq 1 ]]; then
+    generate_mcp_json
+    update_workflows
+    update_routing_tables
+    exit 0
+fi
+
 copy_templates
+generate_mcp_json
 install_skills
 update_workflows
 update_routing_tables

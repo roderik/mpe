@@ -1,8 +1,28 @@
 {
   "agents": ["claude-code", "codex"],
+  "mcpServers": {
+    "linear": {
+      "type": "sse",
+      "url": "https://mcp.linear.app/sse"
+    },
+    "context7": {
+      "type": "http",
+      "url": "https://mcp.context7.com/mcp/oauth"
+    },
+    "octocode": {
+      "command": "npx",
+      "args": ["-y", "octocode-mcp@latest"]
+    }
+  },
   "workflow": {
     "title": "Development Workflow",
-    "description": "Follow this workflow for all implementation tasks. Each phase is mandatory. If you deviate from this workflow, you MUST explain why and how you deviated.",
+    "description": "Follow this workflow for all implementation tasks. Each phase is mandatory. If you deviate from this workflow, you MUST explain why and how you deviated. Exceptions: documentation-only, configuration-only, or research-only tasks may skip tests, but must state why.",
+    "principles": [
+      "ALWAYS use latest package versions. Check npmjs.com, hub.docker.com, pypi.org for current versions before installing.",
+      "Never hardcode old versions unless explicitly required for compatibility.",
+      "Use @latest, :latest tags, or explicit newest version numbers.",
+      "When adding dependencies, verify the package exists and note the current version."
+    ],
     "phases": [
       {
         "name": "Planning",
@@ -11,12 +31,19 @@
         "steps": [
           {
             "action": "Gather context",
-            "tool": "Task({ subagent_type: \"plan-mode:context-researcher\" })"
+            "tool": "Task({ subagent_type: \"plan-mode:context-researcher\" })",
+            "note": "Start with local CLI repo discovery: `rg --files`, `git ls-files`, `ls`, `sed -n '1,200p' file`."
+          },
+          {
+            "action": "Repo-wide search (if needed)",
+            "tool": "mcp__octocode__githubSearchCode",
+            "condition": "MCP configured",
+            "note": "If MCP is configured, use mcp__octocode__* (githubSearchCode, githubGetFileContent, githubViewRepoStructure). Otherwise use local CLI: `rg \"pattern\"`, `rg --files`, `git ls-files`."
           },
           {
             "action": "Check docs",
             "tool": "Skill({ skill: \"context7\" })",
-            "note": "up-to-date library documentation"
+            "note": "If MCP is configured, use mcp__context7__resolve-library-id then mcp__context7__query-docs. Otherwise use local docs/README and CLI search: `rg \"term\" docs`, `rg \"term\" README.md`."
           },
           {
             "action": "Non-greenfield?",
@@ -26,6 +53,12 @@
           {
             "action": "Draft plan",
             "note": "exact file paths, code snippets, 2-5 minute tasks"
+          },
+          {
+            "action": "Update tracking ticket with plan",
+            "tool": "mcp__linear__create_comment",
+            "condition": "tracking work in Linear",
+            "note": "If MCP Linear is configured, add a plan summary comment. Otherwise include the plan summary in the response."
           }
         ]
       },
@@ -86,6 +119,11 @@
             "note": "Refine for clarity"
           },
           {
+            "tool": "Skill({ skill: \"claude-md-improver\" })",
+            "condition": "when CLAUDE.md needs maintenance",
+            "note": "Run after major doc or workflow changes."
+          },
+          {
             "tool": "Skill({ skill: \"deslop\" })",
             "note": "Remove AI-generated slop"
           },
@@ -97,11 +135,12 @@
       },
       {
         "name": "Testing",
-        "command": "bun run test",
+        "command": "bun run ci\n\nor if not available:\n\nbun run lint\nbun run test",
         "steps": [
           {
             "tool": "Skill({ skill: \"agent-browser\" })",
-            "condition": "UI components"
+            "condition": "UI components",
+            "note": "Preferred for UI checks. If unavailable, fall back to Playwright CLI (e.g. `npx playwright install` then run project UI checks)."
           },
           {
             "tool": "Task({ subagent_type: \"build-mode:visual-tester\" })",
@@ -140,9 +179,19 @@
           },
           { "command": "bun run ci" },
           { "action": "Verify exit codes, test counts, no warnings" },
-          { "action": "If issues: Fix and restart loop" }
+          { "action": "If issues: Fix and restart loop" },
+          {
+            "tool": "mcp__linear__update_issue",
+            "note": "If MCP Linear is configured, use mcp__linear__* (list_issues, get_issue, update_issue, create_comment). Otherwise leave a status note in the response.",
+            "condition": "tracking work in Linear"
+          }
         ]
       }
+    ],
+    "mcpServersReference": [
+      { "server": "context7", "tools": "resolve-library-id, query-docs", "purpose": "Up-to-date library documentation" },
+      { "server": "octocode", "tools": "githubSearchCode, githubGetFileContent, githubViewRepoStructure, packageSearch", "purpose": "GitHub code search and exploration" },
+      { "server": "linear", "tools": "list_issues, get_issue, create_issue, update_issue, create_comment", "purpose": "Issue tracking and project management" }
     ],
     "quickReference": [
       { "phase": "Plan", "tool": "/plan", "purpose": "Structure approach" },
@@ -159,7 +208,7 @@
       { "phase": "Clean", "tool": "deslop + knip", "purpose": "Remove cruft" },
       {
         "phase": "Test",
-        "tool": "vitest + agent-browser",
+        "tool": "bun run ci (or lint+test) + agent-browser",
         "purpose": "Verify behavior"
       },
       { "phase": "Review", "tool": "/review", "purpose": "Quality gate" },
@@ -170,14 +219,18 @@
       }
     ]
   },
-  "postInstall": [
-    "brew install jq graphviz poppler semgrep uv",
-    "brew install --cask libreoffice codeql",
-    "uv pip install --system --break-system-packages 'markitdown[pptx]' defusedxml",
-    "npm install -g agent-browser@latest pptxgenjs@latest playwright@latest react-icons@latest react@latest react-dom@latest sharp@latest knip@latest",
-    "agent-browser install",
-    "npx playwright@latest install"
-  ],
+  "postInstall": {
+    "darwin": [
+      "brew install jq graphviz poppler semgrep uv ripgrep",
+      "brew install --cask libreoffice codeql"
+    ],
+    "common": [
+      "uv pip install --system --break-system-packages 'markitdown[pptx]' defusedxml",
+      "npm install -g agent-browser@latest pptxgenjs@latest playwright@latest knip@latest",
+      "agent-browser install",
+      "npx playwright@latest install"
+    ]
+  },
   "skills": [
     {
       "repo": "better-auth/skills",
@@ -233,10 +286,6 @@
       "skills": ["tanstack-query"]
     },
     {
-      "repo": "intellectronica/agent-skills",
-      "skills": ["context7"]
-    },
-    {
       "repo": "boristane/agent-skills",
       "skills": ["logging-best-practices"]
     },
@@ -256,5 +305,108 @@
       "repo": "brianlovin/claude-config",
       "skills": ["deslop", "rams", "knip"]
     }
-  ]
+  ],
+  "skillRouting": {
+    "description": "Hierarchical skill routing by domain. Use category to narrow selection, then match triggers.",
+    "categories": [
+      {
+        "name": "Planning & Context",
+        "triggers": ["plan", "design", "architect", "requirements", "context", "docs", "documentation lookup"],
+        "skills": [
+          { "name": "plan-mode:planning-methodology", "triggers": ["/plan", "plan this", "design approach", "implementation plan"] },
+          { "name": "ask-questions-if-underspecified", "triggers": ["unclear", "ambiguous", "need clarification", "missing requirements"] },
+          { "name": "context7", "triggers": ["library docs", "API reference", "how does X work", "current docs for"], "note": "Prefer mcp__context7__* if MCP configured" }
+        ]
+      },
+      {
+        "name": "Implementation",
+        "triggers": ["implement", "build", "code", "write", "create feature"],
+        "skills": [
+          { "name": "test-driven-development", "triggers": ["TDD", "write test first", "red-green-refactor", "before implementation"] },
+          { "name": "subagent-driven-development", "triggers": ["execute plan", "parallel tasks", "spawn agents"] },
+          { "name": "executing-plans", "triggers": ["follow plan", "implement plan", "execute steps"] },
+          { "name": "dispatching-parallel-agents", "triggers": ["parallel", "concurrent tasks", "independent tasks", "2+ tasks"] }
+        ]
+      },
+      {
+        "name": "Code Quality",
+        "triggers": ["review", "quality", "clean", "refactor", "lint", "unused"],
+        "skills": [
+          { "name": "codex-review", "triggers": ["/review", "code review", "review changes", "check my code"] },
+          { "name": "code-simplifier", "triggers": ["simplify", "cleaner", "more readable", "reduce complexity"] },
+          { "name": "deslop", "triggers": ["AI slop", "unnecessary comments", "defensive checks", "clean up generated"] },
+          { "name": "knip", "triggers": ["unused", "dead code", "unused exports", "unused dependencies"] },
+          { "name": "verification-before-completion", "triggers": ["done?", "complete?", "verify", "before commit", "before PR"] },
+          { "name": "rams", "triggers": ["accessibility", "WCAG", "a11y", "visual design review"] }
+        ]
+      },
+      {
+        "name": "Security",
+        "triggers": ["security", "vulnerability", "audit", "CVE", "OWASP", "injection"],
+        "skills": [
+          { "name": "semgrep", "triggers": ["semgrep", "SAST", "pattern scan", "quick security scan"] },
+          { "name": "codeql", "triggers": ["codeql", "taint tracking", "data flow", "deep security analysis"] },
+          { "name": "differential-review", "triggers": ["PR security", "diff review", "security regression", "blast radius"] },
+          { "name": "variant-analysis", "triggers": ["similar bugs", "bug variants", "pattern hunting", "find other instances"] },
+          { "name": "sarif-parsing", "triggers": ["SARIF", "scan results", "aggregate findings", "security report"] },
+          { "name": "sharp-edges", "triggers": ["footgun", "misuse", "dangerous API", "secure defaults", "pit of success"] }
+        ]
+      },
+      {
+        "name": "Debugging",
+        "triggers": ["bug", "error", "broken", "not working", "fix", "debug"],
+        "skills": [
+          { "name": "systematic-debugging", "triggers": ["investigate", "root cause", "why failing", "trace error"], "note": "Use BEFORE proposing fixes" }
+        ]
+      },
+      {
+        "name": "Testing",
+        "triggers": ["test", "spec", "coverage", "browser test", "e2e"],
+        "skills": [
+          { "name": "property-based-testing", "triggers": ["property test", "fuzzing", "quickcheck", "hypothesis", "edge cases"] },
+          { "name": "agent-browser", "triggers": ["browser", "e2e", "visual test", "screenshot", "form fill", "web automation"] }
+        ]
+      },
+      {
+        "name": "Documentation & Files",
+        "triggers": ["doc", "write", "spreadsheet", "presentation", "xlsx", "pptx"],
+        "skills": [
+          { "name": "doc-coauthoring", "triggers": ["write doc", "proposal", "tech spec", "decision doc", "RFC"] },
+          { "name": "xlsx", "triggers": [".xlsx", "spreadsheet", "Excel", "CSV analysis", "formulas"] },
+          { "name": "pptx", "triggers": [".pptx", "presentation", "PowerPoint", "slides"] },
+          { "name": "writing-skills", "triggers": ["create skill", "new skill", "skill development"] },
+          { "name": "claude-md-improver", "triggers": ["CLAUDE.md", "improve claude config", "audit CLAUDE.md"] }
+        ]
+      },
+      {
+        "name": "Web3 & Smart Contracts",
+        "triggers": ["solidity", "smart contract", "ERC", "blockchain", "web3", "defi"],
+        "skills": [
+          { "name": "guidelines-advisor", "triggers": ["contract review", "solidity best practices", "Trail of Bits"] },
+          { "name": "secure-workflow-guide", "triggers": ["Slither", "security diagram", "fuzzing properties"] },
+          { "name": "token-integration-analyzer", "triggers": ["ERC20", "ERC721", "token integration", "weird tokens"] },
+          { "name": "fuzzing-obstacles", "triggers": ["fuzzer blocked", "checksum", "bypass for fuzzing"] }
+        ]
+      },
+      {
+        "name": "Framework-Specific",
+        "triggers": ["React", "Next.js", "TypeScript", "auth", "query"],
+        "skills": [
+          { "name": "vercel-react-best-practices", "triggers": ["React perf", "Next.js", "bundle size", "SSR", "RSC"] },
+          { "name": "tanstack-query", "triggers": ["TanStack", "React Query", "useQuery", "useMutation", "server state"] },
+          { "name": "typescript-advanced-types", "triggers": ["generic", "conditional type", "mapped type", "infer", "template literal"] },
+          { "name": "better-auth-best-practices", "triggers": ["Better Auth", "auth setup", "session", "OAuth"] },
+          { "name": "create-auth-skill", "triggers": ["add auth", "auth layer", "authentication feature"] }
+        ]
+      },
+      {
+        "name": "Tooling & Meta",
+        "triggers": ["setup", "configure", "automate", "logging"],
+        "skills": [
+          { "name": "claude-automation-recommender", "triggers": ["Claude Code setup", "hooks", "MCP", "automation recommendations"] },
+          { "name": "logging-best-practices", "triggers": ["logging", "canonical log", "wide events", "structured logs"] }
+        ]
+      }
+    ]
+  }
 }

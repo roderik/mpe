@@ -3,7 +3,9 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$SCRIPT_DIR/.."
 CONFIG_FILE="$SCRIPT_DIR/setup.json"
+TEMPLATES_DIR="$SCRIPT_DIR/templates"
 
 # Check dependencies
 if ! command -v jq &>/dev/null; then
@@ -15,6 +17,31 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
     echo "Error: $CONFIG_FILE not found"
     exit 1
 fi
+
+# Copy templates to project
+copy_templates() {
+    if [[ ! -d "$TEMPLATES_DIR" ]]; then
+        return
+    fi
+
+    echo "Setting up project files..."
+
+    # Always copy settings.json and session-start script
+    mkdir -p "$PROJECT_ROOT/.claude/scripts/web/session-start"
+    cp "$TEMPLATES_DIR/.claude/settings.json" "$PROJECT_ROOT/.claude/settings.json"
+    cp "$TEMPLATES_DIR/.claude/scripts/web/session-start/setup.sh" "$PROJECT_ROOT/.claude/scripts/web/session-start/setup.sh"
+    chmod +x "$PROJECT_ROOT/.claude/scripts/web/session-start/setup.sh"
+
+    # Only copy MD files if they don't exist
+    if [[ ! -f "$PROJECT_ROOT/.claude/CLAUDE.md" ]]; then
+        cp "$TEMPLATES_DIR/.claude/CLAUDE.md" "$PROJECT_ROOT/.claude/CLAUDE.md"
+    fi
+
+    mkdir -p "$PROJECT_ROOT/.codex"
+    if [[ ! -f "$PROJECT_ROOT/.codex/AGENTS.md" ]]; then
+        cp "$TEMPLATES_DIR/.codex/AGENTS.md" "$PROJECT_ROOT/.codex/AGENTS.md"
+    fi
+}
 
 # Install skills from config
 install_skills() {
@@ -155,14 +182,14 @@ update_routing_tables() {
     fi
 
     # Update .claude/CLAUDE.md
-    local claude_file="$SCRIPT_DIR/../.claude/CLAUDE.md"
+    local claude_file="$PROJECT_ROOT/.claude/CLAUDE.md"
     if [[ -f "$claude_file" ]]; then
         update_file_routing_table "$claude_file" "$table_content"
         echo "Updated routing table in .claude/CLAUDE.md"
     fi
 
     # Update .codex/AGENTS.md
-    local codex_file="$SCRIPT_DIR/../.codex/AGENTS.md"
+    local codex_file="$PROJECT_ROOT/.codex/AGENTS.md"
     if [[ -f "$codex_file" ]]; then
         update_file_routing_table "$codex_file" "$table_content"
         echo "Updated routing table in .codex/AGENTS.md"
@@ -194,6 +221,7 @@ update_file_routing_table() {
         return
     fi
 
+    # Replace content between tags (removes old content completely)
     awk -v content_file="$content_file" '
     BEGIN { in_section = 0 }
     /<skill-routing-table>/ {
@@ -217,6 +245,7 @@ update_file_routing_table() {
     rm -f "$content_file"
 }
 
+copy_templates
 install_skills
 run_post_install
 update_routing_tables

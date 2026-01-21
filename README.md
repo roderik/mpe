@@ -1,8 +1,10 @@
 # mpe
 
-This repository contains a collection of skills and configurations for Claude Code and Codex. It aims to behave consistently across local CLI usage and web sessions.
+Portable agent setup for Claude Code and Codex that works identically in local CLI and cloud environments.
 
-To do this, skills and setups need to be local to the repository since the web versions cannot use plugins or install skills ad hoc. Dependencies need to be installed during startup as well.
+**The problem:** Cloud/web versions of these agents can't install skills or plugins on-the-fly. You get a vanilla agent with no workflow enforcement, no specialized skills, and no tooling.
+
+**The solution:** Bundle everything in the repository—skills, workflows, commands, and dependency setup scripts—so the agent behaves the same whether you're running locally or in the cloud.
 
 ## Quick Install (Local CLI)
 
@@ -22,18 +24,21 @@ Setup flags:
 
 ## What's Included
 
-**Skills** for:
-- TDD & debugging (obra/superpowers)
-- Security analysis (trailofbits/skills - semgrep, codeql, sarif)
-- React/TanStack Query best practices
-- Document handling (xlsx, pptx)
-- Code review workflows
-- And more...
+**Workflow enforcement** via `CLAUDE.md` / `AGENTS.md`:
+- Task classification (Trivial → Complex) with mandatory phases
+- Gate checks requiring proof before proceeding
+- Skill routing table mapping triggers to capabilities
 
-**Tools** installed via postInstall:
-- jq, graphviz, poppler, semgrep, uv
-- LibreOffice, CodeQL
-- Node packages for browser automation and document processing
+**37 skills** across domains:
+- Development: TDD, systematic debugging, verification
+- Security: Semgrep, CodeQL, differential review, SARIF parsing
+- Quality: Code review, code simplifier, knip (dead code)
+- Docs: xlsx, pptx, doc-coauthoring
+- Frameworks: React/Next.js, TanStack Query, Better Auth
+
+**10 commands**: `/commit`, `/review`, `/pr`, `/branch`, `/sync`, etc.
+
+**Auto-installed tooling**: jq, ripgrep, graphviz, semgrep, CodeQL, playwright, and more
 
 ## Manual Setup
 
@@ -49,7 +54,7 @@ bash .agents/setup.sh
 | Claude Code (local) | `setup.sh` | None after install |
 | Codex CLI (local) | `setup.sh` | None after install |
 | Claude Web | Session-start hook runs `.claude/scripts/web/session-start/setup.sh` | Run script manually if the hook fails |
-| Codex Web | No hook support | Run the web setup manually |
+| Codex Web | Setup/maintenance scripts | Configure in project settings |
 
 Manual web setup (Codex Web or as a fallback):
 
@@ -63,6 +68,52 @@ bash .agents/setup.sh --lite
 
 Note: `setup.sh` will also update Codex MCP config in `~/.codex/config.toml` based on `.agents/setup.json`. Use `--skip-codex-mcp` to avoid touching global config.
 
+## Cloud Setup
+
+Both Claude Code and Codex require specific configuration for cloud/web environments.
+
+### Claude Code (claude.ai/code)
+
+1. **Network Permissions**: Set to **Full** in project settings
+   - Required for installing dependencies and accessing package registries
+
+2. **Dependency Installation**: Automatic via session-start hook
+   - The hook at `.claude/settings.json` triggers `.claude/scripts/web/session-start/setup.sh`
+   - Installs system tools (jq, ripgrep, graphviz, etc.)
+   - Installs Python packages (markitdown, semgrep)
+   - Installs Node packages (agent-browser, playwright, knip)
+   - Sets up CodeQL for security analysis
+
+### Codex (codex.openai.com)
+
+1. **Network Permissions**: Set to **Full** in project settings
+   - Required for installing dependencies and accessing package registries
+
+2. **Setup Script**: Configure in project settings
+   - Add to **Setup script** field:
+     ```
+     bash ./.claude/scripts/web/session-start/setup.sh
+     ```
+
+3. **Maintenance Script**: Configure in project settings
+   - Add to **Maintenance script** field:
+     ```
+     bash ./.claude/scripts/web/session-start/setup.sh
+     ```
+
+### What the Setup Script Installs
+
+The web setup script (`.claude/scripts/web/session-start/setup.sh`) installs:
+
+| Category | Packages |
+| --- | --- |
+| System tools | jq, ripgrep, graphviz, poppler-utils |
+| Python | markitdown[pptx], defusedxml, semgrep |
+| Node.js | agent-browser, pptxgenjs, playwright, knip |
+| Security | CodeQL CLI |
+
+The script only runs in remote environments (checks for `CLAUDE_CODE_REMOTE` or detects cloud environment).
+
 ## Refresh Workflow + Routing Tables
 
 When you update skills or the workflow config, re-sync the docs:
@@ -74,11 +125,18 @@ When you update skills or the workflow config, re-sync the docs:
 ## Structure
 
 ```
-├── CLAUDE.md       # Claude Code instructions with skill routing table
-├── AGENTS.md       # Codex instructions with skill routing table
+├── CLAUDE.md           # Claude Code instructions (generated from templates/claude/)
+├── AGENTS.md           # Codex instructions (generated from templates/codex/)
+├── .claude/
+│   ├── settings.json   # Hooks configuration (session-start)
+│   ├── commands/       # Slash commands (/commit, /review, etc.)
+│   └── scripts/        # Session scripts for web environments
 └── .agents/
-    ├── setup.json  # Skills configuration
-    ├── setup.sh    # Installation script
-    ├── templates/  # Template files for new projects
-    └── skills/     # Installed skills (gitignored)
+    ├── setup.json      # Skills and MCP configuration
+    ├── setup.sh        # Installation script
+    ├── commands/       # Command templates (copied to .claude/commands/)
+    ├── templates/
+    │   ├── claude/     # Claude Code templates (CLAUDE.md + sections)
+    │   └── codex/      # Codex templates (AGENTS.md + sections)
+    └── skills/         # Installed skills (gitignored)
 ```

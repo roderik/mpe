@@ -2,6 +2,8 @@
 
 Classify before implementation. When in doubt, classify up.
 
+**Execution Mode:** Check `CLAUDE_CODE_REMOTE` env var. If `true` → Remote Mode (autonomous). See Hard Requirements for adjustments.
+
 ### Rules
 1. New file => at least Simple (never Trivial).
 2. Multiple files => at least Standard.
@@ -36,11 +38,12 @@ ITERATION TRACKING:
 #### Simple
 ```
 CLASSIFICATION: Simple
+MODE: [Local|Remote] ← check CLAUDE_CODE_REMOTE
 
 REQUIRED SKILLS (invoke Skill() tool - checklist is not loading):
 - [ ] verification-before-completion — invoke before GATE-3
 - [ ] test-driven-development — invoke before GATE-3
-- [ ] ask-questions-if-underspecified — invoke before GATE-2 (ALWAYS, no exceptions)
+- [ ] ask-questions-if-underspecified — invoke before GATE-2 (Local: ask always | Remote: ask only if ambiguous)
 
 REQUIRED PHASES (output gate with PROOF before each):
 - [ ] Phase 1: Planning (1 pass) → GATE-1
@@ -65,11 +68,12 @@ SELF-CHECKS:
 #### Standard
 ```
 CLASSIFICATION: Standard
+MODE: [Local|Remote] ← check CLAUDE_CODE_REMOTE
 
 REQUIRED SKILLS (invoke Skill() tool - checklist is not loading):
 - [ ] verification-before-completion — invoke before GATE-3
 - [ ] test-driven-development — invoke before GATE-3
-- [ ] ask-questions-if-underspecified — invoke before GATE-2
+- [ ] ask-questions-if-underspecified — invoke before GATE-2 (Local: ask always | Remote: ask only if ambiguous)
 
 REQUIRED PHASES (output gate with PROOF before each):
 - [ ] Phase 1: Planning → GATE-1
@@ -95,11 +99,12 @@ SELF-CHECKS:
 #### Complex
 ```
 CLASSIFICATION: Complex
+MODE: [Local|Remote] ← check CLAUDE_CODE_REMOTE
 
 REQUIRED SKILLS (invoke Skill() tool - checklist is not loading):
 - [ ] verification-before-completion — invoke before GATE-3
 - [ ] test-driven-development — invoke before GATE-3
-- [ ] ask-questions-if-underspecified — invoke before GATE-2
+- [ ] ask-questions-if-underspecified — invoke before GATE-2 (Local: ask always | Remote: ask only if ambiguous)
 - [ ] systematic-debugging — invoke if modifying existing code
 - [ ] differential-review — invoke before GATE-6
 

@@ -2,18 +2,17 @@
 
 ### Workflow Bypass
 - Trivial bypass: "task is simple" to skip workflow -> classify first and follow minimum steps.
-- Direct implementation: code before `TodoWrite` -> call `TodoWrite({ status: "in_progress" })` first.
-- Classification avoidance: no classification before implementation -> state classification before first TodoWrite.
+- Direct implementation: code before TODO checklist -> start TODO list first.
+- Classification avoidance: no classification before implementation -> state classification before first TODO.
 
 ### Skill Failures
-- Skill avoidance: no skills loaded -> load at least verification-before-completion.
-- Skill mention vs load: "I'll use TDD" without `Skill({ skill: "..." })` call -> actually invoke the tool.
-- Checklist theater: listing skills in checklist without invoking Skill() tool -> checklist is not loading.
-- Conditional skip: "shell scripts don't need TDD" -> TDD applies to all code, load the skill.
-- Implicit knowledge: "I know TDD" without loading -> skill provides specific instructions, load it.
-- **Load without follow:** invoked Skill() but ignored its instructions -> loading = commitment to follow.
-- **TDD theater:** loaded TDD skill then wrote code without tests -> delete code, write test first.
-- **Fake ask-questions:** checked box without invoking skill, said "requirements clear" -> MUST invoke tool AND ask.
+- Skill avoidance: no skills activated -> explicitly invoke required skills via `/skills` or `$skill-name`.
+- Skill mention vs activation: "I'll use TDD" without invoking `$test-driven-development` -> activate the skill explicitly.
+- Conditional skip: "shell scripts don't need TDD" -> TDD applies to all code.
+- Implicit knowledge: "I know TDD" without activation -> load the skill or follow its full workflow manually.
+- **Activation without follow-through:** invoked a skill but ignored its instructions -> activation = commitment.
+- **TDD theater:** activated TDD then wrote code without tests -> delete code, write test first.
+- **Fake questions:** claimed to ask questions but skipped them -> at least one clarifying question is mandatory.
 
 ### Gate Failures
 - Gate amnesia: output GATE-1, GATE-3, then forget the rest -> output ALL gates for your classification.
@@ -23,11 +22,11 @@
 - False pass: marking STATUS: PASS when requirements not met -> BLOCKED until proof shown.
 
 ### Phase Skipping
-- Phase 2 skip: "requirements are clear" -> ask anyway via `ask-questions-if-underspecified`.
-- Phase 6 skip: "code is simple, doesn't need review" -> run `/review` regardless.
+- Phase 2 skip: "requirements are clear" -> ask anyway.
+- Phase 6 skip: "code is simple, doesn't need review" -> run `/review` and show output.
 - Implicit phases: doing phase work without outputting the gate -> gate output is mandatory.
 - Single iteration: doing 1 pass when classification requires 2+ -> track and show iteration count.
-- **Manual review substitution:** "reviewed manually" or "reviewed the code" instead of `Skill({ skill: "review" })` -> tool invocation required.
+- **Review substitution:** skipping `/review` without documented alternative review output -> NOT acceptable.
 - **Port rationalization:** "it's just a port/translation" to skip questions -> ports have ambiguity too (error handling, idioms, edge cases).
 
 ### Iteration Failures
@@ -36,10 +35,14 @@
 - Uncounted iterations: not tracking iteration count -> output "Iteration N of M" for each pass.
 
 ### Verification Failures
-- Unverified completion: claim done without verification -> run `Skill({ skill: "verification-before-completion" })` with evidence.
+- Unverified completion: claim done without verification -> run verification commands with evidence.
 - Partial verification: "syntax check passed" as full verification -> run project CI if available.
 - Stale evidence: "tests passed earlier" -> run fresh verification before completion claim.
-- Load without execute: loaded verification skill but never ran it -> execute and show output.
+- Activation without execution: activated verification skill but never ran verification -> execute and show output.
+
+### Implementation Failures
+- **Sequential when parallel possible:** executing 2+ independent tasks one-by-one -> use parallel Codex threads.
+- **Thread avoidance:** "file operations are quick" to skip parallelization -> if tasks are independent, parallelize.
 
 ### Evidence Failures
 - Implied evidence: "I ran the tests" without showing output -> paste actual command output.

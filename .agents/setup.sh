@@ -53,39 +53,43 @@ else
 fi
 
 # Compose markdown files from templates
+# $1: agent template directory (e.g., templates/claude or templates/codex)
+# $2: template file name (e.g., CLAUDE.md or AGENTS.md)
+# $3: output file path
 compose_md_file() {
-    local template_file="$1"
-    local output_file="$2"
+    local agent_template_dir="$1"
+    local template_file="$agent_template_dir/$2"
+    local output_file="$3"
 
     if [[ ! -f "$template_file" ]]; then
         return
     fi
 
-    # Read all template content files
+    # Read all template content files from the agent-specific directory
     local task_classification_content=""
     local hard_requirements_content=""
     local anti_patterns_content=""
     local workflows_content=""
     local routing_content=""
 
-    if [[ -f "$TEMPLATES_DIR/task-classification.md" ]]; then
-        task_classification_content=$(cat "$TEMPLATES_DIR/task-classification.md")
+    if [[ -f "$agent_template_dir/task-classification.md" ]]; then
+        task_classification_content=$(cat "$agent_template_dir/task-classification.md")
     fi
 
-    if [[ -f "$TEMPLATES_DIR/hard-requirements.md" ]]; then
-        hard_requirements_content=$(cat "$TEMPLATES_DIR/hard-requirements.md")
+    if [[ -f "$agent_template_dir/hard-requirements.md" ]]; then
+        hard_requirements_content=$(cat "$agent_template_dir/hard-requirements.md")
     fi
 
-    if [[ -f "$TEMPLATES_DIR/anti-patterns.md" ]]; then
-        anti_patterns_content=$(cat "$TEMPLATES_DIR/anti-patterns.md")
+    if [[ -f "$agent_template_dir/anti-patterns.md" ]]; then
+        anti_patterns_content=$(cat "$agent_template_dir/anti-patterns.md")
     fi
 
-    if [[ -f "$TEMPLATES_DIR/workflows.md" ]]; then
-        workflows_content=$(cat "$TEMPLATES_DIR/workflows.md")
+    if [[ -f "$agent_template_dir/workflows.md" ]]; then
+        workflows_content=$(cat "$agent_template_dir/workflows.md")
     fi
 
-    if [[ -f "$TEMPLATES_DIR/skill-routing-table.md" ]]; then
-        routing_content=$(cat "$TEMPLATES_DIR/skill-routing-table.md")
+    if [[ -f "$agent_template_dir/skill-routing-table.md" ]]; then
+        routing_content=$(cat "$agent_template_dir/skill-routing-table.md")
     fi
 
     # Read template and replace placeholders
@@ -110,17 +114,28 @@ copy_templates() {
 
     echo "Setting up project files..."
 
-    # Always copy settings.json and session-start script
-    mkdir -p "$PROJECT_ROOT/.claude/scripts/web/session-start"
-    cp "$TEMPLATES_DIR/.claude/settings.json" "$PROJECT_ROOT/.claude/settings.json"
-    cp "$TEMPLATES_DIR/.claude/scripts/web/session-start/setup.sh" "$PROJECT_ROOT/.claude/scripts/web/session-start/setup.sh"
-    chmod +x "$PROJECT_ROOT/.claude/scripts/web/session-start/setup.sh"
+    local claude_templates="$TEMPLATES_DIR/claude"
+    local codex_templates="$TEMPLATES_DIR/codex"
 
-    # Compose and copy MD files (always regenerate from templates)
-    compose_md_file "$TEMPLATES_DIR/CLAUDE.md" "$PROJECT_ROOT/CLAUDE.md"
-    compose_md_file "$TEMPLATES_DIR/AGENTS.md" "$PROJECT_ROOT/AGENTS.md"
+    # Copy Claude-specific settings.json and session-start script
+    if [[ -d "$claude_templates/.claude" ]]; then
+        mkdir -p "$PROJECT_ROOT/.claude/scripts/web/session-start"
+        cp "$claude_templates/.claude/settings.json" "$PROJECT_ROOT/.claude/settings.json"
+        cp "$claude_templates/.claude/scripts/web/session-start/setup.sh" "$PROJECT_ROOT/.claude/scripts/web/session-start/setup.sh"
+        chmod +x "$PROJECT_ROOT/.claude/scripts/web/session-start/setup.sh"
+    fi
 
-    echo "Generated CLAUDE.md and AGENTS.md from templates"
+    # Compose CLAUDE.md from claude/ templates
+    if [[ -d "$claude_templates" ]] && [[ -f "$claude_templates/CLAUDE.md" ]]; then
+        compose_md_file "$claude_templates" "CLAUDE.md" "$PROJECT_ROOT/CLAUDE.md"
+        echo "  Generated CLAUDE.md from templates/claude/"
+    fi
+
+    # Compose AGENTS.md from codex/ templates
+    if [[ -d "$codex_templates" ]] && [[ -f "$codex_templates/AGENTS.md" ]]; then
+        compose_md_file "$codex_templates" "AGENTS.md" "$PROJECT_ROOT/AGENTS.md"
+        echo "  Generated AGENTS.md from templates/codex/"
+    fi
 }
 
 # Copy commands to agent-specific folders

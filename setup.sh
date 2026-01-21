@@ -3,8 +3,12 @@ set -e
 
 REPO="roderik/mpe"
 BRANCH="main"
-BASE_URL="https://raw.githubusercontent.com/$REPO/$BRANCH"
+ARCHIVE_URL="https://github.com/$REPO/archive/refs/heads/$BRANCH.tar.gz"
 ARGS=("$@")
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TARGET_DIR="$(pwd)"
+TARGET_AGENTS_DIR="$TARGET_DIR/.agents"
+SOURCE_AGENTS_DIR="$SCRIPT_DIR/.agents"
 
 ensure_jq() {
     if command -v jq &>/dev/null; then
@@ -53,20 +57,63 @@ ensure_jq() {
     fi
 }
 
+agents_ready() {
+    [[ -f "$TARGET_AGENTS_DIR/setup.sh" ]] \
+        && [[ -f "$TARGET_AGENTS_DIR/setup.json" ]] \
+        && [[ -d "$TARGET_AGENTS_DIR/templates" ]] \
+        && [[ -d "$TARGET_AGENTS_DIR/skills" ]]
+}
+
+download_agents() {
+    echo "Downloading .agents from $REPO..."
+
+    if ! command -v tar &>/dev/null; then
+        echo "Error: tar is required to download .agents."
+        exit 1
+    fi
+
+    local tmp_dir repo_name repo_dir
+    tmp_dir=$(mktemp -d)
+    repo_name="${REPO##*/}"
+
+    curl -sL "$ARCHIVE_URL" | tar -xz -C "$tmp_dir"
+
+    repo_dir="$tmp_dir/${repo_name}-${BRANCH}"
+    if [[ ! -d "$repo_dir/.agents" ]]; then
+        echo "Error: .agents not found in downloaded archive."
+        exit 1
+    fi
+
+    mkdir -p "$TARGET_AGENTS_DIR"
+    cp -R "$repo_dir/.agents"/. "$TARGET_AGENTS_DIR"/
+
+    rm -rf "$tmp_dir"
+}
+
+ensure_agents_dir() {
+    if agents_ready; then
+        return
+    fi
+
+    if [[ -d "$SOURCE_AGENTS_DIR" && "$SOURCE_AGENTS_DIR" != "$TARGET_AGENTS_DIR" ]]; then
+        echo "Copying .agents from $SOURCE_AGENTS_DIR..."
+        mkdir -p "$TARGET_AGENTS_DIR"
+        cp -R "$SOURCE_AGENTS_DIR"/. "$TARGET_AGENTS_DIR"/
+        return
+    fi
+
+    download_agents
+}
+
 echo "Setting up agent skills..."
 
-# Create .agents directory
-mkdir -p .agents
+ensure_agents_dir
 
-# Download setup files
-echo "Downloading configuration..."
-curl -sL "$BASE_URL/.agents/setup.json" -o .agents/setup.json
-curl -sL "$BASE_URL/.agents/setup.sh" -o .agents/setup.sh
-chmod +x .agents/setup.sh
+chmod +x "$TARGET_AGENTS_DIR/setup.sh"
 
 # Run the setup
 echo "Installing skills..."
 ensure_jq
-bash .agents/setup.sh "${ARGS[@]}"
+bash "$TARGET_AGENTS_DIR/setup.sh" "${ARGS[@]}"
 
 echo "Done! Skills installed to .agents/skills/"

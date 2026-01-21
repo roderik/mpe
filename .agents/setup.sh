@@ -94,6 +94,7 @@ update_routing_tables() {
         local skill_description=""
         local in_frontmatter=false
         local frontmatter_started=false
+        local reading_multiline_desc=false
 
         while IFS= read -r line; do
             if [[ "$line" == "---" ]]; then
@@ -107,13 +108,38 @@ update_routing_tables() {
             fi
 
             if [[ "$in_frontmatter" == true ]]; then
+                # Check if we're in a multiline description
+                if [[ "$reading_multiline_desc" == true ]]; then
+                    # If line starts with a field name (word followed by colon), stop multiline
+                    if [[ "$line" =~ ^[a-zA-Z_-]+: ]]; then
+                        reading_multiline_desc=false
+                    elif [[ -n "$line" ]]; then
+                        # Append to description (trim leading whitespace)
+                        local trimmed_line="${line#"${line%%[![:space:]]*}"}"
+                        if [[ -n "$trimmed_line" ]]; then
+                            skill_description+=" $trimmed_line"
+                        fi
+                        continue
+                    fi
+                fi
+
                 if [[ "$line" =~ ^name:\ *(.+)$ ]]; then
                     skill_name="${BASH_REMATCH[1]}"
+                elif [[ "$line" =~ ^description:\ *\>$ ]] || [[ "$line" =~ ^description:\ *\|$ ]]; then
+                    # Multiline YAML description (folded > or literal |)
+                    skill_description=""
+                    reading_multiline_desc=true
                 elif [[ "$line" =~ ^description:\ *(.+)$ ]]; then
                     skill_description="${BASH_REMATCH[1]}"
+                    # Remove surrounding quotes if present
+                    skill_description="${skill_description#\"}"
+                    skill_description="${skill_description%\"}"
                 fi
             fi
         done <"$skill_file"
+
+        # Clean up description - collapse multiple spaces
+        skill_description=$(echo "$skill_description" | tr -s ' ' | sed 's/^ //')
 
         if [[ -n "$skill_name" && -n "$skill_description" ]]; then
             routing_content+="| $skill_description | \`Skill({ skill: \"$skill_name\" })\` |"$'\n'

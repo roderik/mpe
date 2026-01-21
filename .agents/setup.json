@@ -46,32 +46,29 @@
       "bannedPhrases": ["looks good", "tests pass (without output)", "no issues (without what was checked)", "should work"]
     },
     "principles": [
-      "ALWAYS use latest package versions. Check npmjs.com, hub.docker.com, pypi.org for current versions before installing.",
-      "Never hardcode old versions unless explicitly required for compatibility.",
-      "Use @latest, :latest tags, or explicit newest version numbers.",
-      "When adding dependencies, verify the package exists and note the current version."
+      "Use latest package versions (@latest/:latest). Verify current versions on npmjs.com, hub.docker.com, pypi.org before installing.",
+      "Only pin older versions for compatibility; if you do, note the current version."
     ],
     "phases": [
       {
         "name": "Planning",
-        "trigger": "Skill({ skill: \"plan-mode:planning-methodology\" })",
-        "alias": "/plan",
+        "trigger": "Planning phase",
         "steps": [
           {
             "action": "Gather context",
-            "tool": "Task({ subagent_type: \"plan-mode:context-researcher\" })",
-            "note": "Start with local CLI repo discovery: `rg --files`, `git ls-files`, `ls`, `sed -n '1,200p' file`. If `rg` is missing, use `find . -type f` and `grep -R \"pattern\" .`."
+            "tool": "Local repo discovery",
+            "note": "Start with local discovery: `rg --files`, `git ls-files`, `ls`, `sed -n '1,200p' file` (fallback: `find`/`grep`)."
           },
           {
             "action": "Repo-wide search (if needed)",
             "tool": "mcp__octocode__githubSearchCode",
             "condition": "MCP configured",
-            "note": "If MCP is configured, use mcp__octocode__* (githubSearchCode, githubGetFileContent, githubViewRepoStructure). Otherwise use local CLI: `rg \"pattern\"`, `rg --files`, `git ls-files`."
+            "note": "Use mcp__octocode__* if configured; otherwise local `rg`/`git ls-files`."
           },
           {
             "action": "Check docs",
-            "tool": "Skill({ skill: \"context7\" })",
-            "note": "If MCP is configured, use mcp__context7__resolve-library-id then mcp__context7__query-docs. Otherwise use local docs/README and CLI search: `rg \"term\" docs`, `rg \"term\" README.md`."
+            "tool": "mcp__context7__resolve-library-id then mcp__context7__query-docs",
+            "note": "Use MCP context7 if configured; otherwise local docs/README + `rg`."
           },
           {
             "action": "Non-greenfield?",
@@ -120,7 +117,7 @@
         },
         "steps": [
           {
-            "tool": "Task({ subagent_type: \"build-mode:spec-reviewer\", prompt: \"Review plan against requirements\" })"
+            "action": "Review plan against requirements; document gaps and update the plan"
           },
           { "tool": "Skill({ skill: \"ask-questions-if-underspecified\" })" },
           {
@@ -148,16 +145,14 @@
             "note": "RED: Write failing test FIRST"
           },
           {
-            "tool": "Task({ subagent_type: \"build-mode:task-implementer\" })",
+            "action": "Implement minimal code to pass tests",
             "note": "GREEN: Minimal code"
           },
           {
-            "tool": "Task({ subagent_type: \"build-mode:spec-reviewer\" })",
-            "note": "Verify spec compliance"
+            "action": "Verify spec compliance"
           },
           {
-            "tool": "Task({ subagent_type: \"build-mode:quality-reviewer\" })",
-            "note": "Code quality check"
+            "action": "Review code quality and maintainability"
           },
           { "tool": "TodoWrite({ status: \"completed\" })" }
         ]
@@ -192,21 +187,20 @@
           {
             "tool": "Skill({ skill: \"agent-browser\" })",
             "condition": "UI components",
-            "note": "Preferred for UI checks. If unavailable, fall back to Playwright CLI (e.g. `npx playwright install` then run project UI checks)."
+            "note": "Preferred for UI checks; fall back to Playwright if unavailable."
           },
           {
-            "tool": "Task({ subagent_type: \"build-mode:visual-tester\" })",
+            "action": "Run visual checks",
             "condition": "UI changes"
           },
           {
-            "tool": "Task({ subagent_type: \"build-mode:silent-failure-hunter\" })",
-            "note": "Find error handling gaps"
+            "action": "Check for silent failure gaps (missing error handling)"
           }
         ]
       },
       {
         "name": "Review",
-        "trigger": "Skill({ skill: \"build-mode:review\" })",
+        "trigger": "Skill({ skill: \"codex-review\" })",
         "alias": "/review",
         "iterations": 5,
         "note": "Rule-of-Five convergence for code review",
@@ -223,13 +217,13 @@
           "evidenceRequired": "Test output with counts, code citations with line numbers, tool output"
         },
         "steps": [
-          { "tool": "Task({ subagent_type: \"build-mode:code-reviewer\" })" },
+          { "action": "Review for bugs, regressions, and missing tests" },
           {
             "tool": "mcp__codex (Claude Code only)",
             "note": "Deep reasoning review for complex logic - skip in Codex"
           },
           {
-            "tool": "Task({ subagent_type: \"build-mode:security-reviewer\" })",
+            "action": "Security review (semgrep/codeql if needed)",
             "condition": "auth/data/payments"
           },
           {
@@ -258,7 +252,7 @@
         },
         "steps": [
           {
-            "tool": "Task({ subagent_type: \"build-mode:completion-validator\" })"
+            "action": "Run completion validation checklist"
           },
           { "command": "bun run ci" },
           { "action": "Document evidence: exit codes, test counts, warnings" },
@@ -270,39 +264,6 @@
             "condition": "tracking work in Linear"
           }
         ]
-      }
-    ],
-    "mcpServersReference": [
-      { "server": "context7", "tools": "resolve-library-id, query-docs", "purpose": "Up-to-date library documentation" },
-      { "server": "octocode", "tools": "githubSearchCode, githubGetFileContent, githubViewRepoStructure, packageSearch", "purpose": "GitHub code search and exploration" },
-      { "server": "linear", "tools": "list_issues, get_issue, create_issue, update_issue, create_comment", "purpose": "Issue tracking and project management" },
-      { "server": "shadcn", "tools": "add, diff, list", "purpose": "shadcn/ui component generation and management" },
-      { "server": "codex", "tools": "deep-reasoning, code-review, architecture-analysis", "purpose": "Deep code reasoning with gpt-5.2-codex (Claude Code only)", "_note": "Do not configure in Codex" },
-      { "server": "restate-docs", "tools": "query", "purpose": "Restate durable execution framework documentation" }
-    ],
-    "quickReference": [
-      { "phase": "Plan", "tool": "/plan", "purpose": "Structure approach" },
-      {
-        "phase": "Refine",
-        "tool": "spec-reviewer + questions",
-        "purpose": "Perfect the plan"
-      },
-      {
-        "phase": "Build",
-        "tool": "subagent-driven-development",
-        "purpose": "TDD implementation"
-      },
-      { "phase": "Clean", "tool": "deslop + knip", "purpose": "Remove cruft" },
-      {
-        "phase": "Test",
-        "tool": "bun run ci (or lint+test) + agent-browser",
-        "purpose": "Verify behavior"
-      },
-      { "phase": "Review", "tool": "/review", "purpose": "Quality gate" },
-      {
-        "phase": "Verify",
-        "tool": "verification-before-completion",
-        "purpose": "Evidence-based completion"
       }
     ]
   },
@@ -399,9 +360,9 @@
         "name": "Planning & Context",
         "triggers": ["plan", "design", "architect", "requirements", "context", "docs", "documentation lookup"],
         "skills": [
-          { "name": "plan-mode:planning-methodology", "triggers": ["/plan", "plan this", "design approach", "implementation plan"] },
+          { "name": "planning workflow", "triggers": ["/plan", "plan this", "design approach", "implementation plan"], "note": "Use Planning phase steps" },
           { "name": "ask-questions-if-underspecified", "triggers": ["unclear", "ambiguous", "need clarification", "missing requirements"] },
-          { "name": "context7", "triggers": ["library docs", "API reference", "how does X work", "current docs for"], "note": "Prefer mcp__context7__* if MCP configured" }
+          { "name": "mcp__context7__resolve-library-id then mcp__context7__query-docs", "triggers": ["library docs", "API reference", "how does X work", "current docs for"], "note": "Use MCP context7 if configured" }
         ]
       },
       {

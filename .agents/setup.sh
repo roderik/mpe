@@ -247,5 +247,10 @@ update_file_routing_table() {
 
 copy_templates
 install_skills
-run_post_install
+
+# Update routing tables before post-install so they're always available
 update_routing_tables
+
+# Post-install is optional - don't fail the whole setup if it fails
+# (brew commands won't work in web environments, for example)
+run_post_install || echo "Note: Some post-install commands failed (this is expected in web environments)"

@@ -52,6 +52,56 @@ else
     CODEX_PROMPTS_DIR="$PROJECT_ROOT/.codex/prompts"
 fi
 
+# Compose markdown files from templates
+compose_md_file() {
+    local template_file="$1"
+    local output_file="$2"
+
+    if [[ ! -f "$template_file" ]]; then
+        return
+    fi
+
+    # Read all template content files
+    local task_classification_content=""
+    local hard_requirements_content=""
+    local anti_patterns_content=""
+    local workflows_content=""
+    local routing_content=""
+
+    if [[ -f "$TEMPLATES_DIR/task-classification.md" ]]; then
+        task_classification_content=$(cat "$TEMPLATES_DIR/task-classification.md")
+    fi
+
+    if [[ -f "$TEMPLATES_DIR/hard-requirements.md" ]]; then
+        hard_requirements_content=$(cat "$TEMPLATES_DIR/hard-requirements.md")
+    fi
+
+    if [[ -f "$TEMPLATES_DIR/anti-patterns.md" ]]; then
+        anti_patterns_content=$(cat "$TEMPLATES_DIR/anti-patterns.md")
+    fi
+
+    if [[ -f "$TEMPLATES_DIR/workflows.md" ]]; then
+        workflows_content=$(cat "$TEMPLATES_DIR/workflows.md")
+    fi
+
+    if [[ -f "$TEMPLATES_DIR/skill-routing-table.md" ]]; then
+        routing_content=$(cat "$TEMPLATES_DIR/skill-routing-table.md")
+    fi
+
+    # Read template and replace placeholders
+    local content
+    content=$(cat "$template_file")
+
+    # Replace all placeholders
+    content="${content//\{\{TASK_CLASSIFICATION\}\}/$task_classification_content}"
+    content="${content//\{\{HARD_REQUIREMENTS\}\}/$hard_requirements_content}"
+    content="${content//\{\{ANTI_PATTERNS\}\}/$anti_patterns_content}"
+    content="${content//\{\{WORKFLOWS\}\}/$workflows_content}"
+    content="${content//\{\{SKILL_ROUTING_TABLE\}\}/$routing_content}"
+
+    echo "$content" > "$output_file"
+}
+
 # Copy templates to project
 copy_templates() {
     if [[ ! -d "$TEMPLATES_DIR" ]]; then
@@ -66,14 +116,11 @@ copy_templates() {
     cp "$TEMPLATES_DIR/.claude/scripts/web/session-start/setup.sh" "$PROJECT_ROOT/.claude/scripts/web/session-start/setup.sh"
     chmod +x "$PROJECT_ROOT/.claude/scripts/web/session-start/setup.sh"
 
-    # Only copy MD files if they don't exist (at project root)
-    if [[ ! -f "$PROJECT_ROOT/CLAUDE.md" ]]; then
-        cp "$TEMPLATES_DIR/CLAUDE.md" "$PROJECT_ROOT/CLAUDE.md"
-    fi
+    # Compose and copy MD files (always regenerate from templates)
+    compose_md_file "$TEMPLATES_DIR/CLAUDE.md" "$PROJECT_ROOT/CLAUDE.md"
+    compose_md_file "$TEMPLATES_DIR/AGENTS.md" "$PROJECT_ROOT/AGENTS.md"
 
-    if [[ ! -f "$PROJECT_ROOT/AGENTS.md" ]]; then
-        cp "$TEMPLATES_DIR/AGENTS.md" "$PROJECT_ROOT/AGENTS.md"
-    fi
+    echo "Generated CLAUDE.md and AGENTS.md from templates"
 }
 
 # Copy commands to agent-specific folders
@@ -315,431 +362,9 @@ run_post_install() {
     echo "Post-install commands completed"
 }
 
-# Compile hierarchical skill routing from config
-compile_skill_routing() {
-    local routing_json
-    routing_json=$(jq -r '.skillRouting // empty' "$CONFIG_FILE")
-
-    if [[ -z "$routing_json" || "$routing_json" == "null" ]]; then
-        return ""
-    fi
-
-    local md=""
-    local cat_count
-    cat_count=$(echo "$routing_json" | jq -r '.categories | length')
-
-    for ((c = 0; c < cat_count; c++)); do
-        local category
-        category=$(echo "$routing_json" | jq -r ".categories[$c]")
-
-        local cat_name cat_triggers
-        cat_name=$(echo "$category" | jq -r '.name')
-        cat_triggers=$(echo "$category" | jq -r '.triggers | join(", ")')
-
-        md+="### $cat_name"$'\n'
-        md+="**Triggers:** $cat_triggers"$'\n\n'
-        md+="| Trigger Phrases | Invocation |"$'\n'
-        md+="|-----------------|------------|"$'\n'
-
-        local skill_count
-        skill_count=$(echo "$category" | jq -r '.skills | length')
-
-        for ((s = 0; s < skill_count; s++)); do
-            local skill skill_name skill_triggers skill_note
-            skill=$(echo "$category" | jq -r ".skills[$s]")
-            skill_name=$(echo "$skill" | jq -r '.name')
-            skill_triggers=$(echo "$skill" | jq -r '.triggers | join(", ")')
-            skill_note=$(echo "$skill" | jq -r '.note // empty')
-
-            local triggers_col="$skill_triggers"
-            [[ -n "$skill_note" ]] && triggers_col+=" *(${skill_note})*"
-            md+="| $triggers_col | \`Skill({ skill: \"$skill_name\" })\` |"$'\n'
-        done
-        md+=$'\n'
-    done
-
-    echo "$md"
-}
-
-# Update routing tables in agent configuration files
-update_routing_tables() {
-    local table_content=""
-
-    # Try hierarchical routing from config first
-    local hierarchical_content
-    hierarchical_content=$(compile_skill_routing)
-
-    if [[ -n "$hierarchical_content" ]]; then
-        table_content="$hierarchical_content"
-    else
-        # Fallback: extract from SKILL.md files
-        local skills_dir="$SCRIPT_DIR/skills"
-        local entries=()
-
-        if [[ -d "$skills_dir" ]]; then
-            while IFS= read -r -d '' skill_file; do
-                local skill_name=""
-                local skill_description=""
-                local in_frontmatter=false
-                local frontmatter_started=false
-                local reading_multiline_desc=false
-
-                while IFS= read -r line; do
-                    if [[ "$line" == "---" ]]; then
-                        if [[ "$frontmatter_started" == false ]]; then
-                            frontmatter_started=true
-                            in_frontmatter=true
-                            continue
-                        else
-                            break
-                        fi
-                    fi
-
-                    if [[ "$in_frontmatter" == true ]]; then
-                        if [[ "$reading_multiline_desc" == true ]]; then
-                            if [[ "$line" =~ ^[a-zA-Z_-]+: ]]; then
-                                reading_multiline_desc=false
-                            elif [[ -n "$line" ]]; then
-                                local trimmed_line="${line#"${line%%[![:space:]]*}"}"
-                                [[ -n "$trimmed_line" ]] && skill_description+=" $trimmed_line"
-                                continue
-                            fi
-                        fi
-
-                        if [[ "$line" =~ ^name:\ *(.+)$ ]]; then
-                            skill_name="${BASH_REMATCH[1]}"
-                        elif [[ "$line" =~ ^description:\ *\>$ ]] || [[ "$line" =~ ^description:\ *\|$ ]]; then
-                            skill_description=""
-                            reading_multiline_desc=true
-                        elif [[ "$line" =~ ^description:\ *(.+)$ ]]; then
-                            skill_description="${BASH_REMATCH[1]}"
-                            skill_description="${skill_description#\"}"
-                            skill_description="${skill_description%\"}"
-                        fi
-                    fi
-                done <"$skill_file"
-
-                skill_description=$(echo "$skill_description" | tr -s ' ' | sed 's/^ //')
-
-                if [[ -n "$skill_name" && -n "$skill_description" ]]; then
-                    entries+=("$skill_name|$skill_description")
-                fi
-            done < <(find "$skills_dir" -name "SKILL.md" -print0 2>/dev/null)
-
-            if [[ ${#entries[@]} -gt 0 ]]; then
-                local routing_content
-                routing_content=$(printf '%s\n' "${entries[@]}" | sort -t '|' -k1,1 | while IFS='|' read -r name desc; do
-                    printf '| %s | `Skill({ skill: "%s" })` |\n' "$desc" "$name"
-                done)
-                table_content="| When to use | Invocation |"$'\n'
-                table_content+="| ----------- | ---------- |"$'\n'
-                table_content+="$routing_content"
-            fi
-        fi
-    fi
-
-    if [[ -z "$table_content" ]]; then
-        echo "No skill routing content found"
-        return
-    fi
-
-    # Update CLAUDE.md at project root
-    local claude_file="$PROJECT_ROOT/CLAUDE.md"
-    if [[ -f "$claude_file" ]]; then
-        update_file_routing_table "$claude_file" "$table_content"
-        echo "Updated routing table in CLAUDE.md"
-    fi
-
-    # Update AGENTS.md at project root
-    local agents_file="$PROJECT_ROOT/AGENTS.md"
-    if [[ -f "$agents_file" ]]; then
-        update_file_routing_table "$agents_file" "$table_content"
-        echo "Updated routing table in AGENTS.md"
-    fi
-}
-
-update_file_routing_table() {
-    local file="$1"
-    local content="$2"
-    local temp_file
-    temp_file=$(mktemp)
-    local content_file
-    content_file=$(mktemp)
-
-    printf '%s' "$content" >"$content_file"
-
-    # Check if skill-routing-table tags exist
-    if ! grep -q '<skill-routing-table>' "$file"; then
-        # Append the tags to the end of the file
-        {
-            cat "$file"
-            echo ""
-            echo "<skill-routing-table>"
-            cat "$content_file"
-            echo "</skill-routing-table>"
-        } >"$temp_file"
-        mv "$temp_file" "$file"
-        rm -f "$content_file"
-        return
-    fi
-
-    # Replace content between tags (removes old content completely)
-    awk -v content_file="$content_file" '
-    BEGIN { in_section = 0 }
-    /<skill-routing-table>/ {
-      print
-      in_section = 1
-      next
-    }
-    /<\/skill-routing-table>/ {
-      while ((getline line < content_file) > 0) {
-        print line
-      }
-      close(content_file)
-      print
-      in_section = 0
-      next
-    }
-    !in_section { print }
-  ' "$file" >"$temp_file"
-
-    mv "$temp_file" "$file"
-    rm -f "$content_file"
-}
-
-# Compile workflow JSON to markdown
-compile_workflow() {
-    local workflow_json="$1"
-    local md=""
-
-    # Title and description
-    local title
-    title=$(echo "$workflow_json" | jq -r '.title // "Workflow"')
-    local desc
-    desc=$(echo "$workflow_json" | jq -r '.description // ""')
-    md+="## $title"$'\n\n'
-    [[ -n "$desc" ]] && md+="$desc"$'\n\n'
-
-    # Principles
-    local principles
-    principles=$(echo "$workflow_json" | jq -r '.principles // empty')
-    if [[ -n "$principles" && "$principles" != "null" ]]; then
-        md+="### Principles"$'\n\n'
-        local prin_count
-        prin_count=$(echo "$principles" | jq -r 'length')
-        for ((pr = 0; pr < prin_count; pr++)); do
-            local prin
-            prin=$(echo "$principles" | jq -r ".[$pr]")
-            md+="- $prin"$'\n'
-        done
-        md+=$'\n'
-    fi
-
-    # Phases
-    local phase_count
-    phase_count=$(echo "$workflow_json" | jq -r '.phases | length')
-
-    for ((p = 0; p < phase_count; p++)); do
-        local phase
-        phase=$(echo "$workflow_json" | jq -r ".phases[$p]")
-        local name iter trigger alias with iron_law note cmd
-
-        name=$(echo "$phase" | jq -r '.name')
-        iter=$(echo "$phase" | jq -r '.iterations // empty')
-        trigger=$(echo "$phase" | jq -r '.trigger // empty')
-        alias=$(echo "$phase" | jq -r '.alias // empty')
-        with=$(echo "$phase" | jq -r '.with // empty')
-        iron_law=$(echo "$phase" | jq -r '.ironLaw // empty')
-        note=$(echo "$phase" | jq -r '.note // empty')
-        cmd=$(echo "$phase" | jq -r '.command // empty')
-
-        # Phase header
-        local header="### Phase $((p + 1)): $name"
-        [[ -n "$iter" ]] && header+=" ($iter+ iterations)"
-        md+="$header"$'\n\n'
-
-        # Trigger line
-        if [[ -n "$trigger" ]]; then
-            md+="**Start:** \`$trigger\`"
-            [[ -n "$alias" ]] && md+=" or \`$alias\`"
-            md+=$'\n\n'
-        fi
-
-        # With line
-        [[ -n "$with" ]] && md+="**With:** \`$with\`"$'\n\n'
-
-        # Note
-        [[ -n "$note" ]] && md+="$note"$'\n\n'
-
-        # Command
-        [[ -n "$cmd" ]] && md+="\`\`\`bash"$'\n'"$cmd"$'\n'"\`\`\`"$'\n\n'
-
-        # Steps
-        local steps
-        steps=$(echo "$phase" | jq -r '.steps // .perTask // empty')
-        if [[ -n "$steps" && "$steps" != "null" ]]; then
-            local step_count
-            step_count=$(echo "$steps" | jq -r 'length')
-            for ((s = 0; s < step_count; s++)); do
-                local step action tool snote cond
-                step=$(echo "$steps" | jq -r ".[$s]")
-                action=$(echo "$step" | jq -r '.action // empty')
-                tool=$(echo "$step" | jq -r '.tool // empty')
-                snote=$(echo "$step" | jq -r '.note // empty')
-                cond=$(echo "$step" | jq -r '.condition // empty')
-                scmd=$(echo "$step" | jq -r '.command // empty')
-
-                local line="$((s + 1)). "
-                if [[ -n "$action" ]]; then
-                    line+="**$action**"
-                    [[ -n "$tool" ]] && line+=" - \`$tool\`"
-                elif [[ -n "$tool" ]]; then
-                    line+="\`$tool\`"
-                elif [[ -n "$scmd" ]]; then
-                    line+="Run: \`$scmd\`"
-                fi
-                [[ -n "$cond" ]] && line+=" *(if $cond)*"
-                [[ -n "$snote" ]] && line+=" - $snote"
-                md+="$line"$'\n'
-            done
-            md+=$'\n'
-        fi
-
-        # Deepen list
-        local deepen
-        deepen=$(echo "$phase" | jq -r '.deepen // empty')
-        if [[ -n "$deepen" && "$deepen" != "null" ]]; then
-            md+="**Each iteration must deepen:** "
-            md+=$(echo "$deepen" | jq -r 'join(", ")')
-            md+="."$'\n\n'
-        fi
-
-        # Iron law
-        [[ -n "$iron_law" ]] && md+="**Iron Law:** $iron_law"$'\n\n'
-    done
-
-    # Quick reference table
-    local qr
-    qr=$(echo "$workflow_json" | jq -r '.quickReference // empty')
-    if [[ -n "$qr" && "$qr" != "null" ]]; then
-        md+="### Quick Reference"$'\n\n'
-        md+="| Phase | Tool | Purpose |"$'\n'
-        md+="|-------|------|---------|"$'\n'
-        local qr_count
-        qr_count=$(echo "$qr" | jq -r 'length')
-        for ((q = 0; q < qr_count; q++)); do
-            local row ph tl pu
-            row=$(echo "$qr" | jq -r ".[$q]")
-            ph=$(echo "$row" | jq -r '.phase')
-            tl=$(echo "$row" | jq -r '.tool')
-            pu=$(echo "$row" | jq -r '.purpose')
-            md+="| $ph | \`$tl\` | $pu |"$'\n'
-        done
-        md+=$'\n'
-    fi
-
-    # MCP servers reference table
-    local mcp
-    mcp=$(echo "$workflow_json" | jq -r '.mcpServersReference // empty')
-    if [[ -n "$mcp" && "$mcp" != "null" ]]; then
-        md+="### MCP Servers Reference"$'\n\n'
-        md+="| Server | Tools | Purpose |"$'\n'
-        md+="|--------|-------|---------|"$'\n'
-        local mcp_count
-        mcp_count=$(echo "$mcp" | jq -r 'length')
-        for ((m = 0; m < mcp_count; m++)); do
-            local row srv tools pu
-            row=$(echo "$mcp" | jq -r ".[$m]")
-            srv=$(echo "$row" | jq -r '.server')
-            tools=$(echo "$row" | jq -r '.tools')
-            pu=$(echo "$row" | jq -r '.purpose')
-            md+="| \`mcp__${srv}__*\` | $tools | $pu |"$'\n'
-        done
-    fi
-
-    echo "$md"
-}
-
-# Update workflows section from config
-update_workflows() {
-    local workflow_json
-    workflow_json=$(jq -r '.workflow // empty' "$CONFIG_FILE")
-
-    if [[ -z "$workflow_json" || "$workflow_json" == "null" ]]; then
-        return
-    fi
-
-    local workflow_content
-    workflow_content=$(compile_workflow "$workflow_json")
-
-    # Update CLAUDE.md at project root
-    local claude_file="$PROJECT_ROOT/CLAUDE.md"
-    if [[ -f "$claude_file" ]]; then
-        update_file_section "$claude_file" "$workflow_content" "workflows"
-        echo "Updated workflows in CLAUDE.md"
-    fi
-
-    # Update AGENTS.md at project root
-    local agents_file="$PROJECT_ROOT/AGENTS.md"
-    if [[ -f "$agents_file" ]]; then
-        update_file_section "$agents_file" "$workflow_content" "workflows"
-        echo "Updated workflows in AGENTS.md"
-    fi
-}
-
-update_file_section() {
-    local file="$1"
-    local content="$2"
-    local tag="$3"
-    local temp_file
-    temp_file=$(mktemp)
-    local content_file
-    content_file=$(mktemp)
-
-    printf '%s' "$content" >"$content_file"
-
-    # Check if tags exist
-    if ! grep -q "<$tag>" "$file"; then
-        {
-            cat "$file"
-            echo ""
-            echo "<$tag>"
-            cat "$content_file"
-            echo "</$tag>"
-        } >"$temp_file"
-        mv "$temp_file" "$file"
-        rm -f "$content_file"
-        return
-    fi
-
-    # Replace content between tags
-    awk -v content_file="$content_file" -v tag="$tag" '
-    BEGIN { in_section = 0 }
-    $0 ~ "<"tag">" {
-      print
-      in_section = 1
-      next
-    }
-    $0 ~ "</"tag">" {
-      while ((getline line < content_file) > 0) {
-        print line
-      }
-      close(content_file)
-      print
-      in_section = 0
-      next
-    }
-    !in_section { print }
-  ' "$file" >"$temp_file"
-
-    mv "$temp_file" "$file"
-    rm -f "$content_file"
-}
-
 if [[ $DOCS_ONLY -eq 1 ]]; then
     generate_mcp_json
-    update_workflows
-    update_routing_tables
+    copy_templates
     copy_commands
     exit 0
 fi
@@ -749,6 +374,4 @@ copy_commands
 generate_mcp_json
 configure_codex_mcp
 install_skills
-update_workflows
-update_routing_tables
 run_post_install || echo "Note: Some post-install commands failed (this is expected in web environments)"

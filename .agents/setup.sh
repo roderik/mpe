@@ -271,11 +271,17 @@ run_post_install() {
     esac
 
     if [[ "$post_type" == "array" ]]; then
-        mapfile -t cmds < <(jq -r '.postInstall[]' "$CONFIG_FILE")
+        while IFS= read -r line; do
+            cmds+=("$line")
+        done < <(jq -r '.postInstall[]' "$CONFIG_FILE")
     elif [[ "$post_type" == "object" ]]; then
-        mapfile -t cmds < <(jq -r '.postInstall.common // [] | .[]' "$CONFIG_FILE")
+        while IFS= read -r line; do
+            cmds+=("$line")
+        done < <(jq -r '.postInstall.common // [] | .[]' "$CONFIG_FILE")
         if [[ -n "$os_key" ]]; then
-            mapfile -t os_cmds < <(jq -r --arg os "$os_key" '.postInstall[$os] // [] | .[]' "$CONFIG_FILE")
+            while IFS= read -r line; do
+                os_cmds+=("$line")
+            done < <(jq -r --arg os "$os_key" '.postInstall[$os] // [] | .[]' "$CONFIG_FILE")
             cmds+=("${os_cmds[@]}")
         fi
     else

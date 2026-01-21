@@ -1,5 +1,17 @@
 ## Hard Requirements (No Exceptions)
 
+### Execution Mode Detection
+
+Check `CODEX_INTERNAL_ORIGINATOR_OVERRIDE` environment variable at session start:
+- `CODEX_INTERNAL_ORIGINATOR_OVERRIDE=codex_web_agent` → **Remote Mode** (autonomous, minimal interaction)
+- Otherwise → **Local Mode** (interactive, full questioning)
+
+**Remote Mode Adjustments:**
+- Phase 2 questioning is **optional** - only ask if genuinely ambiguous
+- "Requirements are clear" is **allowed** (not a banned phrase)
+- `ask-questions-if-underspecified` skill: activate but only act if ambiguity score > 7/10
+- All other gates, skills, and quality requirements remain **unchanged**
+
 **ALWAYS**
 - Maintain a visible TODO checklist in the response. Mark in-progress before writing production code; mark completed after implementation.
 - Activate required skills explicitly via `/skills` or `$skill-name` when a phase mandates them (or state that the skill is unavailable and follow equivalent manual steps).
@@ -70,7 +82,7 @@ Before each phase, output a gate check. Do not proceed if a gate is BLOCKED. Do 
 
 Gate requirements:
 - GATE-1 Planning: classification stated + checklist output.
-- GATE-2 Plan Refinement: explicit `$ask-questions-if-underspecified` invocation (Standard/Complex) + at least one clarifying question asked in plain text.
+- GATE-2 Plan Refinement: explicit `$ask-questions-if-underspecified` invocation (Standard/Complex). **Local:** at least one clarifying question asked. **Remote:** questions optional unless genuinely ambiguous.
 - GATE-3 Implementation: explicit `$test-driven-development` + `$verification-before-completion` invocation + TODO list started + parallel-thread check documented.
 - GATE-4 Cleanup: all implementation TODOs complete.
 - GATE-5 Testing: test file exists + test output with exit code shown (or explicit "no tests possible" justification).
@@ -102,6 +114,7 @@ Before saying "done" or "complete", confirm evidence for:
 - Verification executed
 - Verification command exit code 0
 
-**Banned phrases:** "looks good", "should work", "Done!", "that's it", "requirements are clear", "it's just a port", "direct translation", "1:1 conversion", "straightforward"
+**Banned phrases:** "looks good", "should work", "Done!", "that's it", "it's just a port", "direct translation", "1:1 conversion", "straightforward"
+- **Local only banned:** "requirements are clear" (allowed in Remote Mode when genuinely clear)
 
 **Required completion format:** evidence summary + verification output + gates passed list + iteration counts

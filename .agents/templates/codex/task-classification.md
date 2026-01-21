@@ -2,6 +2,8 @@
 
 Classify before implementation. When in doubt, classify up.
 
+**Execution Mode:** Check `CODEX_INTERNAL_ORIGINATOR_OVERRIDE` env var. If `codex_web_agent` → Remote Mode (autonomous). See Hard Requirements for adjustments.
+
 ### Rules
 1. New file => at least Simple (never Trivial).
 2. Multiple files => at least Standard.
@@ -36,11 +38,12 @@ ITERATION TRACKING:
 #### Simple
 ```
 CLASSIFICATION: Simple
+MODE: [Local|Remote] ← check CODEX_INTERNAL_ORIGINATOR_OVERRIDE
 
 REQUIRED SKILLS (activate via `/skills` or `$skill-name`):
 - [ ] verification-before-completion — activate before GATE-3
 - [ ] test-driven-development — activate before GATE-3
-- [ ] ask-questions-if-underspecified — activate before GATE-2 (ALWAYS, no exceptions)
+- [ ] ask-questions-if-underspecified — activate before GATE-2 (Local: ask always | Remote: ask only if ambiguous)
 
 REQUIRED PHASES (output gate with PROOF before each):
 - [ ] Phase 1: Planning (1 pass) → GATE-1
@@ -65,11 +68,12 @@ SELF-CHECKS:
 #### Standard
 ```
 CLASSIFICATION: Standard
+MODE: [Local|Remote] ← check CODEX_INTERNAL_ORIGINATOR_OVERRIDE
 
 REQUIRED SKILLS (activate via `/skills` or `$skill-name`):
 - [ ] verification-before-completion — activate before GATE-3
 - [ ] test-driven-development — activate before GATE-3
-- [ ] ask-questions-if-underspecified — activate before GATE-2
+- [ ] ask-questions-if-underspecified — activate before GATE-2 (Local: ask always | Remote: ask only if ambiguous)
 
 REQUIRED PHASES (output gate with PROOF before each):
 - [ ] Phase 1: Planning → GATE-1
@@ -95,11 +99,12 @@ SELF-CHECKS:
 #### Complex
 ```
 CLASSIFICATION: Complex
+MODE: [Local|Remote] ← check CODEX_INTERNAL_ORIGINATOR_OVERRIDE
 
 REQUIRED SKILLS (activate via `/skills` or `$skill-name`):
 - [ ] verification-before-completion — activate before GATE-3
 - [ ] test-driven-development — activate before GATE-3
-- [ ] ask-questions-if-underspecified — activate before GATE-2
+- [ ] ask-questions-if-underspecified — activate before GATE-2 (Local: ask always | Remote: ask only if ambiguous)
 - [ ] systematic-debugging — activate if modifying existing code
 - [ ] differential-review — activate before GATE-6
 

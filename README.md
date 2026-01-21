@@ -47,27 +47,6 @@ curl -sL https://github.com/roderik/mpe/archive/refs/heads/main.tar.gz | tar -xz
 bash .agents/setup.sh
 ```
 
-## Local vs Web
-
-| Environment | Auto setup | Manual step |
-| --- | --- | --- |
-| Claude Code (local) | `setup.sh` | None after install |
-| Codex CLI (local) | `setup.sh` | None after install |
-| Claude Web | Session-start hook runs `.claude/scripts/web/session-start/setup.sh` | Run script manually if the hook fails |
-| Codex Web | Setup/maintenance scripts | Configure in project settings |
-
-Manual web setup (Codex Web or as a fallback):
-
-```bash
-# Install system/python/node deps (best-effort) in web environments
-CLAUDE_CODE_REMOTE=true bash .claude/scripts/web/session-start/setup.sh
-
-# Install skills + update workflow tables
-bash .agents/setup.sh --lite
-```
-
-Note: `setup.sh` will also update Codex MCP config in `~/.codex/config.toml` based on `.agents/setup.json`. Use `--skip-codex-mcp` to avoid touching global config.
-
 ## Cloud Setup
 
 Both Claude Code and Codex require specific configuration for cloud/web environments.

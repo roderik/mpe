@@ -12,7 +12,7 @@
 - Implicit knowledge: "I know TDD" without activation -> load the skill or follow its full workflow manually.
 - **Activation without follow-through:** invoked a skill but ignored its instructions -> activation = commitment.
 - **TDD theater:** activated TDD then wrote code without tests -> delete code, write test first.
-- **Fake questions:** claimed to ask questions but skipped them -> at least one clarifying question is mandatory.
+- **Fake questions:** claimed to ask questions but skipped them -> activate skill. (Remote: asking is optional if ambiguity ≤ 7)
 
 ### Gate Failures
 - Gate amnesia: output GATE-1, GATE-3, then forget the rest -> output ALL gates for your classification.
@@ -22,7 +22,7 @@
 - False pass: marking STATUS: PASS when requirements not met -> BLOCKED until proof shown.
 
 ### Phase Skipping
-- Phase 2 skip: "requirements are clear" -> ask anyway.
+- Phase 2 skip: "requirements are clear" -> Local: ask anyway. Remote: allowed if ambiguity ≤ 7 (still activate skill, document assumptions).
 - Phase 6 skip: "code is simple, doesn't need review" -> run `/review` and show output.
 - Implicit phases: doing phase work without outputting the gate -> gate output is mandatory.
 - Single iteration: doing 1 pass when classification requires 2+ -> track and show iteration count.

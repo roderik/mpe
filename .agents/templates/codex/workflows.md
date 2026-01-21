@@ -32,13 +32,23 @@ Mandatory for implementation tasks. Creating any new file = implementation task.
 ### Phase 2: Plan Refinement ⚠️ COMMONLY SKIPPED
 - **STOP: Output GATE-2 before proceeding.**
 - **REQUIRED:** Activate `$ask-questions-if-underspecified` (if available).
+
+**Local Mode (interactive):**
 - **REQUIRED:** Ask at least one clarifying question in plain text. No exceptions.
+
+**Remote Mode (autonomous):**
+- Assess ambiguity: Is the request genuinely unclear? (Score 1-10)
+- If ambiguity ≤ 7: proceed with reasonable assumptions, document them in plan.
+- If ambiguity > 7: ask focused questions (max 2-3 questions).
+- "Requirements are clear" is allowed when genuinely clear.
+
+**Both modes:**
 - Even "simple ports" have ambiguity: error handling idioms, edge cases, output format, version compatibility.
 - Review plan vs requirements; update.
 - Each iteration must deepen: requirements clarity, edge cases, error handling, test strategy.
 - **Iteration tracking:** Output "Plan Refinement Iteration N of M" for each pass.
 
-**Questions to consider (ask at least one):**
+**Questions to consider (ask if needed):**
 - Scope: What's included/excluded?
 - Behavior: How should edge cases behave?
 - Output: What format/structure is expected?

@@ -3,19 +3,5 @@
     "CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR": true,
     "ENABLE_TOOL_SEARCH": true,
     "FORCE_AUTOUPDATE_PLUGINS": true
-  },
-  "includeCoAuthoredBy": false,
-  "permissions": {
-    "defaultMode": "bypassPermissions"
-  },
-  "enableAllProjectMcpServers": true,
-  "spinnerTipsEnabled": false,
-  "enabledPlugins": {
-    "plugin-dev@claude-plugins-official": true,
-    "typescript-lsp@claude-plugins-official": true,
-    "claude-md-management@claude-plugins-official": true,
-    "claude-code-setup@claude-plugins-official": true,
-    "hookify@claude-plugins-official": true,
-    "code-simplifier@claude-plugins-official": true
   }
 }

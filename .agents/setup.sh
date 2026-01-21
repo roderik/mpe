@@ -1,5 +1,3 @@
 #!/bin/bash
 
-Global status line install as it break claude code on the web
-
-npx skills add
+npx -y skills add better-auth/skills -y -a claude-code -a codex --skill "better-auth-best-practices"

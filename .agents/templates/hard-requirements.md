@@ -68,13 +68,15 @@ Before each phase, output a gate check. Do not proceed if BLOCKED. Do not skip g
 
 Gate requirements:
 - GATE-1 Planning: classification stated + checklist output.
-- GATE-2 Plan Refinement: `ask-questions-if-underspecified` loaded + questions asked OR explicit justification.
-- GATE-3 Implementation: Skill() tool calls visible in context for TDD + verification.
+- GATE-2 Plan Refinement: `Skill({ skill: "ask-questions-if-underspecified" })` tool call visible + questions asked (not "requirements clear").
+- GATE-3 Implementation: `Skill({ skill: "test-driven-development" })` tool call visible + TodoWrite(in_progress) called.
 - GATE-4 Cleanup: all implementation todos complete.
-- GATE-5 Testing: test output with exit code shown.
-- GATE-6 Review: `/review` or `Skill({ skill: "review" })` output shown.
-- GATE-7 Verification: `verification-before-completion` execution output shown.
+- GATE-5 Testing: test file exists + test output with exit code shown (or explicit "no tests possible" justification).
+- GATE-6 Review: `Skill({ skill: "review" })` tool call visible + review output shown. "Manual review" is NOT acceptable.
+- GATE-7 Verification: verification commands run IN THIS MESSAGE with exit code 0 shown.
 - GATE-DONE Completion: all evidence compiled.
+
+**Loading ≠ Following:** Invoking a skill means you MUST follow its instructions. Loading TDD then writing code without tests = violation.
 
 Gate format (use verbatim):
 ```
@@ -98,6 +100,6 @@ Before saying "done" or "complete", confirm evidence for:
 - Verification skill executed (not just loaded)
 - Verification command exit code 0
 
-**Banned phrases:** "looks good", "should work", "Done!", "that's it", "requirements are clear"
+**Banned phrases:** "looks good", "should work", "Done!", "that's it", "requirements are clear", "it's just a port", "direct translation", "1:1 conversion", "straightforward", "manual review", "reviewed the code"
 
 **Required completion format:** evidence summary + verification output + gates passed list + iteration counts

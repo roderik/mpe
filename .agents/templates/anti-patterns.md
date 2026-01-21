@@ -11,6 +11,9 @@
 - Checklist theater: listing skills in checklist without invoking Skill() tool -> checklist is not loading.
 - Conditional skip: "shell scripts don't need TDD" -> TDD applies to all code, load the skill.
 - Implicit knowledge: "I know TDD" without loading -> skill provides specific instructions, load it.
+- **Load without follow:** invoked Skill() but ignored its instructions -> loading = commitment to follow.
+- **TDD theater:** loaded TDD skill then wrote code without tests -> delete code, write test first.
+- **Fake ask-questions:** checked box without invoking skill, said "requirements clear" -> MUST invoke tool AND ask.
 
 ### Gate Failures
 - Gate amnesia: output GATE-1, GATE-3, then forget the rest -> output ALL gates for your classification.
@@ -24,6 +27,8 @@
 - Phase 6 skip: "code is simple, doesn't need review" -> run `/review` regardless.
 - Implicit phases: doing phase work without outputting the gate -> gate output is mandatory.
 - Single iteration: doing 1 pass when classification requires 2+ -> track and show iteration count.
+- **Manual review substitution:** "reviewed manually" or "reviewed the code" instead of `Skill({ skill: "review" })` -> tool invocation required.
+- **Port rationalization:** "it's just a port/translation" to skip questions -> ports have ambiguity too (error handling, idioms, edge cases).
 
 ### Iteration Failures
 - Iteration shortcut: "did 1 iteration, that's enough" for Standard -> Standard requires 2+ iterations.

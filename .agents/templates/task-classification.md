@@ -40,7 +40,7 @@ CLASSIFICATION: Simple
 REQUIRED SKILLS (invoke Skill() tool - checklist is not loading):
 - [ ] verification-before-completion — invoke before GATE-3
 - [ ] test-driven-development — invoke before GATE-3
-- [ ] ask-questions-if-underspecified — invoke before GATE-2 (if ANY ambiguity)
+- [ ] ask-questions-if-underspecified — invoke before GATE-2 (ALWAYS, no exceptions)
 
 REQUIRED PHASES (output gate with PROOF before each):
 - [ ] Phase 1: Planning (1 pass) → GATE-1
@@ -54,6 +54,12 @@ ITERATION TRACKING:
 - Plan Refinement: 1 required | Completed: ___
 - Review: 1 required | Completed: ___
 - Verification: 1 required | Completed: ___
+
+SELF-CHECKS:
+- Before GATE-2: search context for `Skill.*ask-questions`. If not found, STOP.
+- Before GATE-3: search context for `Skill.*test-driven`. If not found, STOP.
+- Before GATE-5: verify test file exists or explain why tests N/A.
+- Before GATE-6: search context for `Skill.*review`. If not found, STOP.
 ```
 
 #### Standard
@@ -79,7 +85,11 @@ ITERATION TRACKING:
 - Review: 2+ required | Completed: ___
 - Verification: 2+ required | Completed: ___
 
-SKILL SELF-CHECK: Before GATE-3, search context for `<invoke name="Skill">`. If not found, STOP.
+SELF-CHECKS:
+- Before GATE-2: search context for `Skill.*ask-questions`. If not found, STOP.
+- Before GATE-3: search context for `Skill.*test-driven`. If not found, STOP.
+- Before GATE-5: verify test file exists or explain why tests N/A.
+- Before GATE-6: search context for `Skill.*review`. If not found, STOP.
 ```
 
 #### Complex
@@ -107,5 +117,9 @@ ITERATION TRACKING:
 - Review: 5+ required | Completed: ___
 - Verification: 5+ required | Completed: ___
 
-SKILL SELF-CHECK: Before GATE-3, search context for `<invoke name="Skill">`. If not found, STOP.
+SELF-CHECKS:
+- Before GATE-2: search context for `Skill.*ask-questions`. If not found, STOP.
+- Before GATE-3: search context for `Skill.*test-driven`. If not found, STOP.
+- Before GATE-5: verify test file exists or explain why tests N/A.
+- Before GATE-6: search context for `Skill.*review` or `Skill.*differential-review`. If not found, STOP.
 ```

@@ -29,11 +29,11 @@ Mandatory for implementation tasks. Creating any new file = implementation task.
 ### Phase 2: Plan Refinement ⚠️ COMMONLY SKIPPED
 - **STOP: Output GATE-2 before proceeding.**
 - **REQUIRED:** `Skill({ skill: "ask-questions-if-underspecified" })` - actually invoke the tool.
-- **REQUIRED:** Ask at least one clarifying question OR justify why not needed with specific evidence.
+- **REQUIRED:** Ask at least one clarifying question. No exceptions. "Requirements clear" is a banned phrase.
+- Even "simple ports" have ambiguity: error handling idioms, edge cases, output format, version compatibility.
 - Review plan vs requirements; update.
 - Deep review: `mcp__codex` (Claude Code) or manual (Codex).
 - Each iteration must deepen: requirements clarity, edge cases, error handling, test strategy.
-- "Requirements seem clear" is a banned phrase - ask anyway.
 - **Iteration tracking:** Output "Plan Refinement Iteration N of M" for each pass.
 
 **Questions to consider (ask at least one):**
@@ -47,9 +47,10 @@ Mandatory for implementation tasks. Creating any new file = implementation task.
 ### Phase 3: Implementation
 - **STOP: Output GATE-3 before proceeding.**
 - **REQUIRED:** Load skills via `Skill({ skill: "..." })` tool - not just mention them:
-  - `Skill({ skill: "test-driven-development" })` - even for shell scripts, config files.
+  - `Skill({ skill: "test-driven-development" })` - even for shell scripts, config files, "ports".
   - `Skill({ skill: "verification-before-completion" })` - load now, execute in Phase 7.
 - **Self-check before proceeding:** Search context for `<invoke name="Skill">`. If not found, STOP.
+- **Loading = Commitment:** Once you invoke a skill, you MUST follow its instructions. No exceptions.
 - `TodoWrite(in_progress)` -> RED (failing test) -> GREEN (minimal code) -> `TodoWrite(completed)`.
 - Iron Law: no production code before a failing test. No exceptions for "simple" file types.
 - Use Task() for independent work.
@@ -71,6 +72,7 @@ Mandatory for implementation tasks. Creating any new file = implementation task.
 - **STOP: Output GATE-6 before proceeding.**
 - **REQUIRED:** Run `Skill({ skill: "review" })` or `/review` - do not skip.
 - **REQUIRED:** Show review output in gate.
+- **"Manual review" is NOT acceptable** - must invoke the skill tool.
 - Review for bugs/regressions/missing tests.
 - Security review if auth/data/payments (semgrep/codeql).
 - `differential-review` for diff security.

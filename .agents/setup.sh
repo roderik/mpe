@@ -247,5 +247,5 @@ update_file_routing_table() {
 
 copy_templates
 install_skills
-run_post_install
 update_routing_tables
+run_post_install || echo "Note: Some post-install commands failed (this is expected in web environments)"

@@ -16,7 +16,7 @@ apt-get update -qq 2>/dev/null || true
 apt-get install -y -qq jq graphviz poppler-utils libreoffice-calc unzip >/dev/null 2>&1 || true
 
 echo "Installing Python packages..."
-uv pip install --system 'markitdown[pptx]' defusedxml semgrep --quiet
+uv pip install --system --break-system-packages 'markitdown[pptx]' defusedxml semgrep --quiet
 
 echo "Installing Node packages..."
 bun install -g agent-browser pptxgenjs playwright react-icons react react-dom sharp --silent

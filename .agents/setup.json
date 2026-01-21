@@ -3,7 +3,7 @@
   "postInstall": [
     "brew install jq graphviz poppler semgrep uv",
     "brew install --cask libreoffice codeql",
-    "uv pip install --system 'markitdown[pptx]' defusedxml",
+    "uv pip install --system --break-system-packages 'markitdown[pptx]' defusedxml",
     "npm install -g agent-browser pptxgenjs playwright react-icons react react-dom sharp",
     "agent-browser install",
     "npx playwright install"

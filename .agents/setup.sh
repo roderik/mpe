@@ -32,14 +32,13 @@ copy_templates() {
     cp "$TEMPLATES_DIR/.claude/scripts/web/session-start/setup.sh" "$PROJECT_ROOT/.claude/scripts/web/session-start/setup.sh"
     chmod +x "$PROJECT_ROOT/.claude/scripts/web/session-start/setup.sh"
 
-    # Only copy MD files if they don't exist
-    if [[ ! -f "$PROJECT_ROOT/.claude/CLAUDE.md" ]]; then
-        cp "$TEMPLATES_DIR/.claude/CLAUDE.md" "$PROJECT_ROOT/.claude/CLAUDE.md"
+    # Only copy MD files if they don't exist (at project root)
+    if [[ ! -f "$PROJECT_ROOT/CLAUDE.md" ]]; then
+        cp "$TEMPLATES_DIR/CLAUDE.md" "$PROJECT_ROOT/CLAUDE.md"
     fi
 
-    mkdir -p "$PROJECT_ROOT/.codex"
-    if [[ ! -f "$PROJECT_ROOT/.codex/AGENTS.md" ]]; then
-        cp "$TEMPLATES_DIR/.codex/AGENTS.md" "$PROJECT_ROOT/.codex/AGENTS.md"
+    if [[ ! -f "$PROJECT_ROOT/AGENTS.md" ]]; then
+        cp "$TEMPLATES_DIR/AGENTS.md" "$PROJECT_ROOT/AGENTS.md"
     fi
 }
 
@@ -62,7 +61,7 @@ install_skills() {
 
         local output
         local exit_code
-        output=$(eval "npx -y skills add \"$repo\" -y $agents $skills" 2>&1) && exit_code=$? || exit_code=$?
+        output=$(eval "npx -y skills@latest add \"$repo\" -y $agents $skills" 2>&1) && exit_code=$? || exit_code=$?
 
         if [[ $exit_code -ne 0 ]]; then
             echo "Error installing skills from $repo:"
@@ -181,18 +180,18 @@ update_routing_tables() {
         table_content+="$routing_content"
     fi
 
-    # Update .claude/CLAUDE.md
-    local claude_file="$PROJECT_ROOT/.claude/CLAUDE.md"
+    # Update CLAUDE.md at project root
+    local claude_file="$PROJECT_ROOT/CLAUDE.md"
     if [[ -f "$claude_file" ]]; then
         update_file_routing_table "$claude_file" "$table_content"
-        echo "Updated routing table in .claude/CLAUDE.md"
+        echo "Updated routing table in CLAUDE.md"
     fi
 
-    # Update .codex/AGENTS.md
-    local codex_file="$PROJECT_ROOT/.codex/AGENTS.md"
-    if [[ -f "$codex_file" ]]; then
-        update_file_routing_table "$codex_file" "$table_content"
-        echo "Updated routing table in .codex/AGENTS.md"
+    # Update AGENTS.md at project root
+    local agents_file="$PROJECT_ROOT/AGENTS.md"
+    if [[ -f "$agents_file" ]]; then
+        update_file_routing_table "$agents_file" "$table_content"
+        echo "Updated routing table in AGENTS.md"
     fi
 }
 
@@ -245,7 +244,194 @@ update_file_routing_table() {
     rm -f "$content_file"
 }
 
+# Compile workflow JSON to markdown
+compile_workflow() {
+    local workflow_json="$1"
+    local md=""
+
+    # Title and description
+    local title
+    title=$(echo "$workflow_json" | jq -r '.title // "Workflow"')
+    local desc
+    desc=$(echo "$workflow_json" | jq -r '.description // ""')
+    md+="## $title"$'\n\n'
+    [[ -n "$desc" ]] && md+="$desc"$'\n\n'
+
+    # Phases
+    local phase_count
+    phase_count=$(echo "$workflow_json" | jq -r '.phases | length')
+
+    for ((p = 0; p < phase_count; p++)); do
+        local phase
+        phase=$(echo "$workflow_json" | jq -r ".phases[$p]")
+        local name iter trigger alias with iron_law note cmd
+
+        name=$(echo "$phase" | jq -r '.name')
+        iter=$(echo "$phase" | jq -r '.iterations // empty')
+        trigger=$(echo "$phase" | jq -r '.trigger // empty')
+        alias=$(echo "$phase" | jq -r '.alias // empty')
+        with=$(echo "$phase" | jq -r '.with // empty')
+        iron_law=$(echo "$phase" | jq -r '.ironLaw // empty')
+        note=$(echo "$phase" | jq -r '.note // empty')
+        cmd=$(echo "$phase" | jq -r '.command // empty')
+
+        # Phase header
+        local header="### Phase $((p + 1)): $name"
+        [[ -n "$iter" ]] && header+=" ($iter+ iterations)"
+        md+="$header"$'\n\n'
+
+        # Trigger line
+        if [[ -n "$trigger" ]]; then
+            md+="**Start:** \`$trigger\`"
+            [[ -n "$alias" ]] && md+=" or \`$alias\`"
+            md+=$'\n\n'
+        fi
+
+        # With line
+        [[ -n "$with" ]] && md+="**With:** \`$with\`"$'\n\n'
+
+        # Note
+        [[ -n "$note" ]] && md+="$note"$'\n\n'
+
+        # Command
+        [[ -n "$cmd" ]] && md+="\`\`\`bash"$'\n'"$cmd"$'\n'"\`\`\`"$'\n\n'
+
+        # Steps
+        local steps
+        steps=$(echo "$phase" | jq -r '.steps // .perTask // empty')
+        if [[ -n "$steps" && "$steps" != "null" ]]; then
+            local step_count
+            step_count=$(echo "$steps" | jq -r 'length')
+            for ((s = 0; s < step_count; s++)); do
+                local step action tool snote cond
+                step=$(echo "$steps" | jq -r ".[$s]")
+                action=$(echo "$step" | jq -r '.action // empty')
+                tool=$(echo "$step" | jq -r '.tool // empty')
+                snote=$(echo "$step" | jq -r '.note // empty')
+                cond=$(echo "$step" | jq -r '.condition // empty')
+                scmd=$(echo "$step" | jq -r '.command // empty')
+
+                local line="$((s + 1)). "
+                if [[ -n "$action" ]]; then
+                    line+="**$action**"
+                    [[ -n "$tool" ]] && line+=" - \`$tool\`"
+                elif [[ -n "$tool" ]]; then
+                    line+="\`$tool\`"
+                elif [[ -n "$scmd" ]]; then
+                    line+="Run: \`$scmd\`"
+                fi
+                [[ -n "$cond" ]] && line+=" *(if $cond)*"
+                [[ -n "$snote" ]] && line+=" - $snote"
+                md+="$line"$'\n'
+            done
+            md+=$'\n'
+        fi
+
+        # Deepen list
+        local deepen
+        deepen=$(echo "$phase" | jq -r '.deepen // empty')
+        if [[ -n "$deepen" && "$deepen" != "null" ]]; then
+            md+="**Each iteration must deepen:** "
+            md+=$(echo "$deepen" | jq -r 'join(", ")')
+            md+="."$'\n\n'
+        fi
+
+        # Iron law
+        [[ -n "$iron_law" ]] && md+="**Iron Law:** $iron_law"$'\n\n'
+    done
+
+    # Quick reference table
+    local qr
+    qr=$(echo "$workflow_json" | jq -r '.quickReference // empty')
+    if [[ -n "$qr" && "$qr" != "null" ]]; then
+        md+="### Quick Reference"$'\n\n'
+        md+="| Phase | Tool | Purpose |"$'\n'
+        md+="|-------|------|---------|"$'\n'
+        local qr_count
+        qr_count=$(echo "$qr" | jq -r 'length')
+        for ((q = 0; q < qr_count; q++)); do
+            local row ph tl pu
+            row=$(echo "$qr" | jq -r ".[$q]")
+            ph=$(echo "$row" | jq -r '.phase')
+            tl=$(echo "$row" | jq -r '.tool')
+            pu=$(echo "$row" | jq -r '.purpose')
+            md+="| $ph | \`$tl\` | $pu |"$'\n'
+        done
+    fi
+
+    echo "$md"
+}
+
+# Update workflows section from config
+update_workflows() {
+    local workflow_json
+    workflow_json=$(jq -r '.workflow // empty' "$CONFIG_FILE")
+
+    if [[ -z "$workflow_json" || "$workflow_json" == "null" ]]; then
+        return
+    fi
+
+    local workflow_content
+    workflow_content=$(compile_workflow "$workflow_json")
+
+    # Update CLAUDE.md at project root
+    local claude_file="$PROJECT_ROOT/CLAUDE.md"
+    if [[ -f "$claude_file" ]]; then
+        update_file_section "$claude_file" "$workflow_content" "workflows"
+        echo "Updated workflows in CLAUDE.md"
+    fi
+
+    # Update AGENTS.md at project root
+    local agents_file="$PROJECT_ROOT/AGENTS.md"
+    if [[ -f "$agents_file" ]]; then
+        update_file_section "$agents_file" "$workflow_content" "workflows"
+        echo "Updated workflows in AGENTS.md"
+    fi
+}
+
+update_file_section() {
+    local file="$1"
+    local content="$2"
+    local tag="$3"
+    local temp_file
+    temp_file=$(mktemp)
+    local content_file
+    content_file=$(mktemp)
+
+    printf '%s' "$content" >"$content_file"
+
+    # Check if tags exist
+    if ! grep -q "<$tag>" "$file"; then
+        rm -f "$content_file"
+        return
+    fi
+
+    # Replace content between tags
+    awk -v content_file="$content_file" -v tag="$tag" '
+    BEGIN { in_section = 0 }
+    $0 ~ "<"tag">" {
+      print
+      in_section = 1
+      next
+    }
+    $0 ~ "</"tag">" {
+      while ((getline line < content_file) > 0) {
+        print line
+      }
+      close(content_file)
+      print
+      in_section = 0
+      next
+    }
+    !in_section { print }
+  ' "$file" >"$temp_file"
+
+    mv "$temp_file" "$file"
+    rm -f "$content_file"
+}
+
 copy_templates
 install_skills
+update_workflows
 update_routing_tables
 run_post_install || echo "Note: Some post-install commands failed (this is expected in web environments)"

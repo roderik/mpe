@@ -1,12 +1,182 @@
 {
   "agents": ["claude-code", "codex"],
+  "workflow": {
+    "title": "Development Workflow",
+    "description": "Follow this workflow for all implementation tasks. Each phase is mandatory. If you deviate from this workflow, you MUST explain why and how you deviated.",
+    "phases": [
+      {
+        "name": "Planning",
+        "trigger": "Skill({ skill: \"plan-mode:planning-methodology\" })",
+        "alias": "/plan",
+        "steps": [
+          {
+            "action": "Gather context",
+            "tool": "Task({ subagent_type: \"plan-mode:context-researcher\" })"
+          },
+          {
+            "action": "Check docs",
+            "tool": "Skill({ skill: \"context7\" })",
+            "note": "up-to-date library documentation"
+          },
+          {
+            "action": "Non-greenfield?",
+            "tool": "Skill({ skill: \"systematic-debugging\" })",
+            "note": "understand existing behavior first"
+          },
+          {
+            "action": "Draft plan",
+            "note": "exact file paths, code snippets, 2-5 minute tasks"
+          }
+        ]
+      },
+      {
+        "name": "Plan Refinement",
+        "iterations": 5,
+        "note": "Loop until plan is bulletproof",
+        "steps": [
+          {
+            "tool": "Task({ subagent_type: \"build-mode:spec-reviewer\", prompt: \"Review plan against requirements\" })"
+          },
+          { "tool": "Skill({ skill: \"ask-questions-if-underspecified\" })" },
+          {
+            "tool": "Skill({ skill: \"codex-review\" })",
+            "note": "Review for gaps"
+          },
+          { "action": "Update plan based on findings" }
+        ],
+        "deepen": [
+          "requirements clarity",
+          "edge cases",
+          "error handling",
+          "test strategy"
+        ]
+      },
+      {
+        "name": "Implementation",
+        "trigger": "Skill({ skill: \"subagent-driven-development\" })",
+        "with": "Skill({ skill: \"executing-plans\" })",
+        "ironLaw": "No production code without a failing test first",
+        "perTask": [
+          { "tool": "TodoWrite({ status: \"in_progress\" })" },
+          {
+            "tool": "Skill({ skill: \"test-driven-development\" })",
+            "note": "RED: Write failing test FIRST"
+          },
+          {
+            "tool": "Task({ subagent_type: \"build-mode:task-implementer\" })",
+            "note": "GREEN: Minimal code"
+          },
+          {
+            "tool": "Task({ subagent_type: \"build-mode:spec-reviewer\" })",
+            "note": "Verify spec compliance"
+          },
+          {
+            "tool": "Task({ subagent_type: \"build-mode:quality-reviewer\" })",
+            "note": "Code quality check"
+          },
+          { "tool": "TodoWrite({ status: \"completed\" })" }
+        ]
+      },
+      {
+        "name": "Cleanup",
+        "note": "After all tasks complete",
+        "steps": [
+          {
+            "tool": "Skill({ skill: \"code-simplifier\" })",
+            "note": "Refine for clarity"
+          },
+          {
+            "tool": "Skill({ skill: \"deslop\" })",
+            "note": "Remove AI-generated slop"
+          },
+          {
+            "tool": "Skill({ skill: \"knip\" })",
+            "note": "Remove unused code/deps"
+          }
+        ]
+      },
+      {
+        "name": "Testing",
+        "command": "bun run test",
+        "steps": [
+          {
+            "tool": "Skill({ skill: \"agent-browser\" })",
+            "condition": "UI components"
+          },
+          {
+            "tool": "Task({ subagent_type: \"build-mode:visual-tester\" })",
+            "condition": "UI changes"
+          },
+          {
+            "tool": "Task({ subagent_type: \"build-mode:silent-failure-hunter\" })",
+            "note": "Find error handling gaps"
+          }
+        ]
+      },
+      {
+        "name": "Review",
+        "trigger": "Skill({ skill: \"build-mode:review\" })",
+        "alias": "/review",
+        "steps": [
+          { "tool": "Task({ subagent_type: \"build-mode:code-reviewer\" })" },
+          {
+            "tool": "Task({ subagent_type: \"build-mode:security-reviewer\" })",
+            "condition": "auth/data/payments"
+          },
+          {
+            "tool": "Skill({ skill: \"differential-review\" })",
+            "note": "Security-focused diff review"
+          }
+        ]
+      },
+      {
+        "name": "Verification",
+        "trigger": "Skill({ skill: \"verification-before-completion\" })",
+        "iterations": 5,
+        "ironLaw": "Never claim completion without fresh verification evidence",
+        "steps": [
+          {
+            "tool": "Task({ subagent_type: \"build-mode:completion-validator\" })"
+          },
+          { "command": "bun run test && bun run lint && bun run build" },
+          { "action": "Verify exit codes, test counts, no warnings" },
+          { "action": "If issues: Fix and restart loop" }
+        ]
+      }
+    ],
+    "quickReference": [
+      { "phase": "Plan", "tool": "/plan", "purpose": "Structure approach" },
+      {
+        "phase": "Refine",
+        "tool": "spec-reviewer + questions",
+        "purpose": "Perfect the plan"
+      },
+      {
+        "phase": "Build",
+        "tool": "subagent-driven-development",
+        "purpose": "TDD implementation"
+      },
+      { "phase": "Clean", "tool": "deslop + knip", "purpose": "Remove cruft" },
+      {
+        "phase": "Test",
+        "tool": "vitest + agent-browser",
+        "purpose": "Verify behavior"
+      },
+      { "phase": "Review", "tool": "/review", "purpose": "Quality gate" },
+      {
+        "phase": "Verify",
+        "tool": "verification-before-completion",
+        "purpose": "Evidence-based completion"
+      }
+    ]
+  },
   "postInstall": [
     "brew install jq graphviz poppler semgrep uv",
     "brew install --cask libreoffice codeql",
     "uv pip install --system --break-system-packages 'markitdown[pptx]' defusedxml",
-    "npm install -g agent-browser pptxgenjs playwright react-icons react react-dom sharp",
+    "npm install -g agent-browser@latest pptxgenjs@latest playwright@latest react-icons@latest react@latest react-dom@latest sharp@latest knip@latest",
     "agent-browser install",
-    "npx playwright install"
+    "npx playwright@latest install"
   ],
   "skills": [
     {
@@ -59,10 +229,6 @@
       ]
     },
     {
-      "repo": "blader/humanizer",
-      "skills": ["humanizer"]
-    },
-    {
       "repo": "jezweb/claude-skills",
       "skills": ["tanstack-query"]
     },
@@ -81,6 +247,14 @@
     {
       "repo": "wshobson/agents",
       "skills": ["typescript-advanced-types"]
+    },
+    {
+      "repo": "simonwong/agent-skills",
+      "skills": ["code-simplifier"]
+    },
+    {
+      "repo": "brianlovin/claude-config",
+      "skills": ["deslop", "rams", "knip"]
     }
   ]
 }

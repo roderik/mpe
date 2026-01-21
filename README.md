@@ -38,8 +38,11 @@ bash .agents/setup.sh
 ## Structure
 
 ```
-.agents/
-├── setup.json      # Skills configuration
-├── setup.sh        # Installation script
-└── skills/         # Installed skills (gitignored)
+├── CLAUDE.md       # Claude Code instructions with skill routing table
+├── AGENTS.md       # Codex instructions with skill routing table
+└── .agents/
+    ├── setup.json  # Skills configuration
+    ├── setup.sh    # Installation script
+    ├── templates/  # Template files for new projects
+    └── skills/     # Installed skills (gitignored)
 ```

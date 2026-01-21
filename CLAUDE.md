@@ -1,5 +1,101 @@
 # Claude
 
+<workflows>
+## Development Workflow
+
+Follow this workflow for all implementation tasks. Each phase is mandatory.
+
+### Phase 1: Planning
+
+**Start:** `Skill({ skill: "plan-mode:planning-methodology" })` or `/plan`
+
+1. **Gather context** - `Task({ subagent_type: "plan-mode:context-researcher" })`
+2. **Check docs** - `Skill({ skill: "context7" })` - up-to-date library documentation
+3. **Non-greenfield?** - `Skill({ skill: "systematic-debugging" })` - understand existing behavior first
+4. **Draft plan** - exact file paths, code snippets, 2-5 minute tasks
+
+### Phase 2: Plan Refinement (5+ iterations)
+
+Loop until plan is bulletproof
+
+1. `Task({ subagent_type: "build-mode:spec-reviewer", prompt: "Review plan against requirements" })`
+2. `Skill({ skill: "ask-questions-if-underspecified" })`
+3. `Skill({ skill: "codex-review" })` - Review for gaps
+4. **Update plan based on findings**
+
+**Each iteration must deepen:** requirements clarity, edge cases, error handling, test strategy.
+
+### Phase 3: Implementation
+
+**Start:** `Skill({ skill: "subagent-driven-development" })`
+
+**With:** `Skill({ skill: "executing-plans" })`
+
+1. `TodoWrite({ status: "in_progress" })`
+2. `Skill({ skill: "test-driven-development" })` - RED: Write failing test FIRST
+3. `Task({ subagent_type: "build-mode:task-implementer" })` - GREEN: Minimal code
+4. `Task({ subagent_type: "build-mode:spec-reviewer" })` - Verify spec compliance
+5. `Task({ subagent_type: "build-mode:quality-reviewer" })` - Code quality check
+6. `TodoWrite({ status: "completed" })`
+
+**Iron Law:** No production code without a failing test first
+
+### Phase 4: Cleanup
+
+After all tasks complete
+
+1. `Skill({ skill: "code-simplifier" })` - Refine for clarity
+2. `Skill({ skill: "deslop" })` - Remove AI-generated slop
+3. `Skill({ skill: "knip" })` - Remove unused code/deps
+
+### Phase 5: Testing
+
+```bash
+bun run ci
+```
+
+or if not available:
+
+```bash
+bun run lint
+bun run test
+```
+
+1. `Skill({ skill: "agent-browser" })` *(if UI components)*
+2. `Task({ subagent_type: "build-mode:visual-tester" })` *(if UI changes)*
+3. `Task({ subagent_type: "build-mode:silent-failure-hunter" })` - Find error handling gaps
+
+### Phase 6: Review
+
+**Start:** `Skill({ skill: "build-mode:review" })` or `/review`
+
+1. `Task({ subagent_type: "build-mode:code-reviewer" })`
+2. `Task({ subagent_type: "build-mode:security-reviewer" })` *(if auth/data/payments)*
+3. `Skill({ skill: "differential-review" })` - Security-focused diff review
+
+### Phase 7: Verification (5+ iterations)
+
+**Start:** `Skill({ skill: "verification-before-completion" })`
+
+1. `Task({ subagent_type: "build-mode:completion-validator" })`
+2. Run: `bun run test && bun run lint && bun run build`
+3. **Verify exit codes, test counts, no warnings**
+4. **If issues: Fix and restart loop**
+
+**Iron Law:** Never claim completion without fresh verification evidence
+
+### Quick Reference
+
+| Phase | Tool | Purpose |
+|-------|------|---------|
+| Plan | `/plan` | Structure approach |
+| Refine | `spec-reviewer + questions` | Perfect the plan |
+| Build | `subagent-driven-development` | TDD implementation |
+| Clean | `deslop + knip` | Remove cruft |
+| Test | `vitest + agent-browser` | Verify behavior |
+| Review | `/review` | Quality gate |
+| Verify | `verification-before-completion` | Evidence-based completion |
+</workflows>
 
 <skill-routing-table>
 | When to use | Invocation |
@@ -18,6 +114,8 @@
 | Provides guidance for property-based testing across multiple languages and smart contracts. Use when writing tests, reviewing code with serialization/validation/parsing patterns, designing features, or when property-based testing would provide stronger coverage than example-based tests. | `Skill({ skill: "property-based-testing" })` |
 | Performs security-focused differential review of code changes (PRs, commits, diffs). Adapts analysis depth to codebase size, uses git history for context, calculates blast radius, checks test coverage, and generates comprehensive markdown reports. Automatically detects and prevents security regressions. | `Skill({ skill: "differential-review" })` |
 | Use when facing 2+ independent tasks that can be worked on without shared state or sequential dependencies | `Skill({ skill: "dispatching-parallel-agents" })` |
+| Run accessibility and visual design review on components. Use when reviewing UI code for WCAG compliance and design issues. | `Skill({ skill: "rams" })` |
+| Run knip to find and remove unused files, dependencies, and exports. Use for cleaning up dead code and unused dependencies. | `Skill({ skill: "knip" })` |
 | Techniques for patching code to overcome fuzzing obstacles. Use when checksums, global state, or other barriers block fuzzer progress. | `Skill({ skill: "fuzzing-obstacles" })` |
 | Master TypeScript's advanced type system including generics, conditional types, mapped types, template literals, and utility types for building type-safe applications. Use when implementing complex type logic, creating reusable type utilities, or ensuring compile-time type safety in TypeScript projects. | `Skill({ skill: "typescript-advanced-types" })` |
 | Comprehensive spreadsheet creation, editing, and analysis with support for formulas, formatting, data analysis, and visualization. When Claude needs to work with spreadsheets (.xlsx, .xlsm, .csv, .tsv, etc) for: (1) Creating new spreadsheets with formulas and formatting, (2) Reading or analyzing data, (3) Modify existing spreadsheets while preserving formulas, (4) Data analysis and visualization in spreadsheets, or (5) Recalculating formulas | `Skill({ skill: "xlsx" })` |
@@ -26,6 +124,7 @@
 | Find similar vulnerabilities and bugs across codebases using pattern-based analysis. Use when hunting bug variants, building CodeQL/Semgrep queries, analyzing security vulnerabilities, or performing systematic code audits after finding an initial issue. | `Skill({ skill: "variant-analysis" })` |
 | Run CodeQL static analysis for security vulnerability detection, taint tracking, and data flow analysis. Use when asked to analyze code with CodeQL, create CodeQL databases, write custom QL queries, perform security audits, or set up CodeQL in CI/CD pipelines. | `Skill({ skill: "codeql" })` |
 | Presentation creation, editing, and analysis. When Claude needs to work with presentations (.pptx files) for: (1) Creating new presentations, (2) Modifying or editing content, (3) Working with layouts, (4) Adding comments or speaker notes, or any other presentation tasks | `Skill({ skill: "pptx" })` |
+| Remove AI-generated code slop from the current branch. Use after writing code to clean up unnecessary comments, defensive checks, and inconsistent style. | `Skill({ skill: "deslop" })` |
 | Skill for integrating Better Auth - the comprehensive TypeScript authentication framework. | `Skill({ skill: "better-auth-best-practices" })` |
 | Guide you through Trail of Bits' 5-step secure development workflow. Runs Slither scans, checks special features (upgradeability/ERC conformance/token integration), generates visual security diagrams, helps document security properties for fuzzing/verification, and reviews manual security areas. (project, gitignored) | `Skill({ skill: "secure-workflow-guide" })` |
 | Use when creating new skills, editing existing skills, or verifying skills work before deployment | `Skill({ skill: "writing-skills" })` |
@@ -33,8 +132,8 @@
 | Identifies error-prone APIs, dangerous configurations, and footgun designs that enable security mistakes. Use when reviewing API designs, configuration schemas, cryptographic library ergonomics, or evaluating whether code follows 'secure by default' and 'pit of success' principles. Triggers: footgun, misuse-resistant, secure defaults, API usability, dangerous configuration. | `Skill({ skill: "sharp-edges" })` |
 | React and Next.js performance optimization guidelines from Vercel Engineering. This skill should be used when writing, reviewing, or refactoring React/Next.js code to ensure optimal performance patterns. Triggers on tasks involving React components, Next.js pages, data fetching, bundle optimization, or performance improvements. | `Skill({ skill: "vercel-react-best-practices" })` |
 | Logging best practices focused on wide events (canonical log lines) for powerful debugging and analytics | `Skill({ skill: "logging-best-practices" })` |
-| Remove signs of AI-generated writing from text. Use when editing or reviewing text to make it sound more natural and human-written. Based on Wikipedia's comprehensive "Signs of AI writing" guide. Detects and fixes patterns including: inflated symbolism, promotional language, superficial -ing analyses, vague attributions, em dash overuse, rule of three, AI vocabulary words, negative parallelisms, and excessive conjunctive phrases. | `Skill({ skill: "humanizer" })` |
 | Use when about to claim work is complete, fixed, or passing, before committing or creating PRs - requires running verification commands and confirming output before making any success claims; evidence before assertions always | `Skill({ skill: "verification-before-completion" })` |
+| Simplifies and refines code for clarity, consistency, and maintainability while preserving all functionality. Focuses on recently modified code unless instructed otherwise. | `Skill({ skill: "code-simplifier" })` |
 | Use when executing implementation plans with independent tasks in the current session | `Skill({ skill: "subagent-driven-development" })` |
 | Comprehensive smart contract development advisor based on Trail of Bits' best practices. Analyzes codebase to generate documentation/specifications, review architecture, check upgradeability patterns, assess implementation quality, identify pitfalls, review dependencies, and evaluate testing. Provides actionable recommendations. (project, gitignored) | `Skill({ skill: "guidelines-advisor" })` |
 | Professional code review skill for Claude Code. Automatically collects file changes and task status. Triggers when working directory has uncommitted changes, or reviews latest commit when clean. Triggers: code review, review, 代码审核, 代码审查, 检查代码 | `Skill({ skill: "codex-review" })` |

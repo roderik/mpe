@@ -138,7 +138,7 @@
           {
             "tool": "Task({ subagent_type: \"build-mode:completion-validator\" })"
           },
-          { "command": "bun run test && bun run lint && bun run build" },
+          { "command": "bun run ci" },
           { "action": "Verify exit codes, test counts, no warnings" },
           { "action": "If issues: Fix and restart loop" }
         ]
